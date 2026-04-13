@@ -338,7 +338,7 @@ class database_description(BaseDialog):
             f'database, please add Line Category in the Line Category tab {warning}.'
         ))
         inner_layout.addWidget(html_label(
-            '<b>On Channel Outline</b>: Whether an object only lies on the Channel Outline.'
+            '<b>On Channel Outline</b>: Whether an object ONLY ever lies on the Channel Outline.'
         ))
 
         inner_layout.addSpacing(10)
@@ -357,10 +357,10 @@ class database_description(BaseDialog):
             '<b>Allowed Connections</b>: These are the connections a Line type is allowed to have.'
         ))
         inner_layout.addWidget(html_label(
-            '<b>Double Connection</b>: Whether a line should have a connection at each end.'
+            '<b>Double Connection</b>: Whether a line should have a connection at each end. If a line can ever end in space (not on an object or line) it does not need a double connection.'
         ))
         inner_layout.addWidget(html_label(
-            '<b>On Channel Outline</b>: Whether a line type should only lie on the channel outline.'
+            '<b>On Channel Outline</b>: Whether a line type should ONLY ever lie on the channel outline. '
         ))
 
         inner_layout.addStretch()

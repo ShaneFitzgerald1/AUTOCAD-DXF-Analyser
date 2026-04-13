@@ -137,6 +137,9 @@ def before_after(fixed_all_blocks, blockrefs, lines, correct_lines, fixed_lines,
 
     sort_blockrefs = []
     
+    #If a block is inside a bedit, we know this and how to fix the problem, database would reject outer block name
+    # this would be a pointless rejection as we have already identified the issue, so we compare the blockname inside the bedit to the database 
+    # i.e. we compare the actual block name to the database 
     for block in blockrefs: #sorting blockrefs 
         name, x, y, angle, name_error = block 
         if name_error is not None: 

@@ -3,7 +3,7 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
 from gui.BaseDialog import BaseDialog
 from database.db_models import Session, ObjectID, CategoryLineRule
-from database.db_objects import get_category_catalogue
+from database.db_objects import get_category_catalogue, get_catalogue
 from gui.table_widget import LabeledTableWidget
 from gui.base_table import BaseTable
 from gui.add_object_dialog import database_description, AddObjectDialog, Combox
@@ -96,9 +96,13 @@ class EditDialog(AddObjectDialog):
 
         self.select_object = Combox._add_combo(editobject_layout, 'Object Name:', self.NAME_OPTIONS)
 
-        self.type_combo2     = Combox._add_combo(editobject_layout, 'Type:',               self.TYPE_OPTIONS)
-        self.category_combo2 = Combox._add_combo(editobject_layout, 'Category:',           self.ALL_CATEGORIES)
-        self.channel_combo2  = Combox._add_combo(editobject_layout, 'On Channel Outline:', self.CHANNEL_OPTIONS)
+        name, type_options, all_categories, channel_options = self.create_newbox()
+
+        self.type_combo2     = Combox._add_combo(editobject_layout, 'Type:',               type_options)
+        self.category_combo2 = Combox._add_combo(editobject_layout, 'Category:',           all_categories)
+        self.channel_combo2  = Combox._add_combo(editobject_layout, 'On Channel Outline:', channel_options)
+
+        self.select_object.currentIndexChanged.connect(self.update_combos)
 
         edit_obj_btn = QPushButton('Make Changes')
         edit_obj_btn.clicked.connect(self.edit_object)
@@ -243,8 +247,12 @@ class EditDialog(AddObjectDialog):
         self._remove_connection_combos = self._rebuild_remove_combos(self.remove_connections_container, self.quantity_remove, 'Remove Connection')
         self._add_connection_combos    = self._rebuild_combos(self.add_connections_container,    self.quantity_add,    'Add Connection', filter_existing=True)
 
-        self.double_connection_combo = Combox._add_combo(editcategory_layout, 'Double Connection:',  self.CHANNEL_OPTIONS)
-        self.channel_combo  = Combox._add_combo(editcategory_layout, 'On Channel Outline:', self.CHANNEL_OPTIONS)
+
+        double_connections, channel_options = self.create_newcat_box()
+        self.double_connection_combo = Combox._add_combo(editcategory_layout, 'Double Connection:',  double_connections)
+        self.channel_combo  = Combox._add_combo(editcategory_layout, 'On Channel Outline:', channel_options)
+
+        self.select_category.currentIndexChanged.connect(self.update_cat_box)
 
         edit_obj_btn = QPushButton('Make Changes')
         edit_obj_btn.clicked.connect(self._edit_line_category)
@@ -612,6 +620,99 @@ class EditDialog(AddObjectDialog):
             QMessageBox.No
         )
         return reply == QMessageBox.Yes
+    
+    def define_object(self, object_name):
+        for name, type, category, on_channel in get_catalogue():
+            if object_name == name:
+                return name, type, category, on_channel
+        return None, None, None, None
+
+    def create_newbox(self):
+        object_name = self.select_object.currentText()
+        name, type, category, on_channel = self.define_object(object_name)
+
+        type_options = [t for t in self.TYPE_OPTIONS if t != type]
+        type_options.insert(0, type)
+
+        all_categories = [c for c in self.ALL_CATEGORIES if c != category]
+        all_categories.insert(0, category)
+
+        channel_options = [ch for ch in self.CHANNEL_OPTIONS if ch != on_channel]
+        channel_options.insert(0, on_channel)
+
+        return name, type_options, all_categories, channel_options
+
+    def update_combos(self):
+        _, type_options, all_categories, channel_options = self.create_newbox()
+
+        self.type_combo2.blockSignals(True)
+        self.type_combo2.clear()
+        self.type_combo2.addItems(type_options)
+        self.type_combo2.blockSignals(False)
+
+        self.category_combo2.blockSignals(True)
+        self.category_combo2.clear()
+        self.category_combo2.addItems(all_categories)
+        self.category_combo2.blockSignals(False)
+
+        self.channel_combo2.blockSignals(True)
+        self.channel_combo2.clear()
+        self.channel_combo2.addItems(channel_options)
+        self.channel_combo2.blockSignals(False)
+
+
+    def get_category(self, category_name): 
+        """Function for extracting category values to populate comboxes corretly in categories"""
+        line_categories = get_category_catalogue() 
+        for line_category  in line_categories: 
+            category, allowed_connections, double_connection, on_channel = line_category 
+            if category_name == category: 
+                return double_connection, on_channel    
+        return None, None     
+    
+    def create_newcat_box(self): 
+        category_name = self.select_category.currentText()
+
+        double_connection, on_channel = self.get_category(category_name) 
+
+        double_connections = [c for c in self.CHANNEL_OPTIONS if c != double_connection]
+        double_connections.insert(0, double_connection)
+
+        channel_options = [ch for ch in self.CHANNEL_OPTIONS if ch != on_channel]
+        channel_options.insert(0, on_channel)
+
+        return double_connections, channel_options
+
+    def update_cat_box(self): 
+        double_connections, channel_options = self.create_newcat_box()
+
+        self.double_connection_combo.blockSignals(True)
+        self.double_connection_combo.clear()
+        self.double_connection_combo.addItems(double_connections)
+        self.double_connection_combo.blockSignals(False)
+
+        self.channel_combo.blockSignals(True)
+        self.channel_combo.clear()
+        self.channel_combo.addItems(channel_options)
+        self.channel_combo.blockSignals(False)
+
+
+
+
+
+
+
+
+
+    
+
+
+
+         
+
+    
+
+
            
 
             

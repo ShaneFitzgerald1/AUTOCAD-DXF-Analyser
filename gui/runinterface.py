@@ -1,4 +1,4 @@
-import sys
+import sys, tempfile, shutil, os 
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtGui import QFont, QPixmap, QIcon
 from PyQt5.QtCore import Qt 
@@ -11,13 +11,14 @@ from gui.add_object_dialog import AddObjectDialog, database_description
 from gui.edit_database_dialog import EditDialog
 from gui.database_directory import DatabaseDirectoryDialog
 from database.db_models import get_configured_db_path, get_db_path
+from gui.convertdwg import convertDWG_DXF, convertDXF_DWG
 
 
 class MyWindow(QMainWindow):
     def __init__(self):
             super(MyWindow, self).__init__()
             self.setGeometry(0, 0, 1920, 1000)
-            self.setWindowTitle('Mistake Chekcer Interface')
+            self.setWindowTitle('DXF Analyser')
             self.setWindowIcon(QIcon(resource_path('mjhlogo.png')))
             self.original_filepath = None
             self.initUI()
@@ -61,11 +62,12 @@ class MyWindow(QMainWindow):
         purple_hbox.addStretch()
         purple_vbox = QVBoxLayout()
         purple_vbox.setAlignment(Qt.AlignTop)
-        purple_vbox.setSpacing(4)
-        purple_vbox.setContentsMargins(0, 0, 30, 0)
+        purple_vbox.setSpacing(7)
+        purple_vbox.setContentsMargins(0, 0, 20, 0)
         self.Button4 = self.create_buttons('Edit Object Database',        lambda: EditDialog(mode='object',   parent=self).exec_(), purple_vbox, purple_style)
         self.Button5 = self.create_buttons('Edit Line Category Database', lambda: EditDialog(mode='category', parent=self).exec_(), purple_vbox, purple_style)
         self.Button6 = self.create_buttons('Set Database Directory', self._open_directory_dialog, purple_vbox, purple_style)
+        self.Button7 = self.create_buttons('Database Description', lambda: database_description(parent=self).exec_(), purple_vbox, purple_style)
         purple_hbox.addLayout(purple_vbox)
         self.tab1_grid.addLayout(purple_hbox, 1, 0, 1, 3)
         
@@ -376,9 +378,9 @@ class MyWindow(QMainWindow):
                 vboxgeo1.addWidget(QLabel1)
 
                 if len(self.bedit_mistake_points) == 1: #Getting the language correct 
-                    QLabel2 = QLabel(f'{len(self.bedit_corrected_blocks)} Block was corrected {self.warning} by the Geometry Engine')
+                    QLabel2 = QLabel(f'{len(self.bedit_corrected_blocks)} Block was found to be incorrect {self.warning} by the Geometry Engine')
                 else:
-                    QLabel2 = QLabel(f'{len(self.bedit_corrected_blocks)} Blocks were corrected {self.warning} by the Geometry Engine')
+                    QLabel2 = QLabel(f'{len(self.bedit_corrected_blocks)} Blocks were found to be incorrect {self.warning} by the Geometry Engine')
 
                 QLabel2.setAlignment(Qt.AlignCenter)
                 QLabel2.setFont(QFont('Inter', 10))
@@ -397,15 +399,8 @@ class MyWindow(QMainWindow):
                 QLabel1.setAlignment(Qt.AlignCenter)
                 QLabel1.setFont(QFont('Inter', 10))
 
-                if len(self.mistake_points) == 1: #Getting the language correct 
-                    QLabel2 = QLabel(f'{len(self.corrected_blocks)} Block was corrected {self.warning} by the Geometry Engine')
-                else:
-                    QLabel2 = QLabel(f'{len(self.corrected_blocks)} Blocks were corrected {self.warning} by the Geometry Engine')
-
-                QLabel2.setAlignment(Qt.AlignCenter)
-                QLabel2.setFont(QFont('Inter', 10))
                 vboxgeo1.addWidget(QLabel1)
-                vboxgeo1.addWidget(QLabel2)
+                # vboxgeo1.addWidget(QLabel2)
 
             if len(self.mistake_points) < 1: 
                 QLabel1 = QLabel(f'All {len(self.on_line_points)} Blocks were accepted by the Geometry Engine {self.check}')
@@ -420,16 +415,7 @@ class MyWindow(QMainWindow):
             QLabel3.setAlignment(Qt.AlignCenter)
             QLabel3.setFont(QFont('Inter', 10))
 
-            if len(self.line_mistakes) == 1: 
-                QLabel4 = QLabel(f'{len(self.fixed_lines)} Line was corrected {self.warning} by the Geometry Engine')
-            else:     
-                QLabel4 = QLabel(f'{len(self.fixed_lines)} Lines were corrected {self.warning} by the Geometry Engine')
-
-            QLabel4.setAlignment(Qt.AlignCenter)
-            QLabel4.setFont(QFont('Inter', 10))
-
             vboxgeo2.addWidget(QLabel3)
-            vboxgeo2.addWidget(QLabel4)
 
         if len(self.line_duplicate_points) > 0: #If there are any duplicate lines present
             if len(self.line_duplicate_points) == 1:
@@ -575,19 +561,58 @@ class MyWindow(QMainWindow):
         self.table3.populate(self.all_lines_table)
         self.table4.populate(self.filtered_walls)      
    
-    def import_dxf_file(self):
+    def _update_status(self, app_state, reset):
+        import os
+        display_path = getattr(self, 'display_filepath', self.original_filepath)
+        current_file = os.path.basename(display_path) if display_path else 'None'
+        name = os.path.splitext(current_file)[0]
+        db_path = get_configured_db_path() or get_db_path()
+        if reset is True: 
 
-        self.original_filepath = None
+            self.status_label.setText(
+            f'Current File: {None}\n'
+            f'App State: {app_state}\n'
+            f'Database: {db_path}'
+        )
+        
+        else: 
+            self.status_label.setText(
+                f'Current File: {name}\n'
+                f'App State: {app_state}\n'
+                f'Database: {db_path}'
+            )
+
+    def import_dxf_file(self):
+        self._update_status('No File Loaded', False)
         self.summary_container.setVisible(False)
+        self.delete_temp_folder()
 
         while self.tabs.count() > 1:
             self.tabs.removeTab(1)
 
-        filepath, _ = QFileDialog.getOpenFileName(None, "Select DXF File", "", "DXF Files (*.dxf);;All Files (*)")
+        filepath, _ = QFileDialog.getOpenFileName(None, "Select DXF File", "", "DXF Files (*.dxf *.dwg);;All Files (*)")
+        ext = filepath[-3:].lower()
+        print(f'This is the ext {ext}')
 
-        if filepath:
+        if filepath and ext == 'dxf':
             self.original_filepath = filepath
-            self._run_analysis(filepath) 
+            self.display_filepath = filepath
+            self._run_analysis(filepath, None) 
+            self.imported_dwg = False 
+
+        if filepath and ext == 'dwg':
+            self.display_filepath = filepath  # shown in status label
+            self.temp_dir = tempfile.mkdtemp()
+            filename = os.path.basename(filepath)
+            temp_filepath = os.path.join(self.temp_dir, filename)
+            shutil.copy2(filepath, temp_filepath)
+            self.dwg_original_filepath = filepath #setting the original filepath of the dwg for later 
+
+            dxf_paths = convertDWG_DXF(self.temp_dir, self.temp_dir, r'C:\Program Files\ODA\ODAFileConverter 26.12.0\ODAFileConverter.exe')
+            dwg_conv_dxf_filepath = dxf_paths[0]
+            self.original_filepath = dwg_conv_dxf_filepath  # used for analysis
+            self._run_analysis(dwg_conv_dxf_filepath, filepath)
+            self.imported_dwg = True 
 
         return filepath
 
@@ -598,20 +623,13 @@ class MyWindow(QMainWindow):
         self.update_status_location()
 
     def update_status_location(self):
-        from database.db_models import get_configured_db_path, get_db_path
-        db_path = get_configured_db_path() or get_db_path()
-        current_file = self.original_filepath or 'None'
-        self.status_label.setText(
-            f'Current File: {current_file}\n'
-            f'App State: {"File Loaded" if self.original_filepath else "No File Loaded"}\n'
-            f'Database: {db_path}'
-        )
+        self._update_status('File Loaded ✅' if self.original_filepath else 'No File Loaded', False)
 
     def reload_file(self):
         if self.original_filepath:
-            self._run_analysis(self.original_filepath)
+            self._run_analysis(self.original_filepath, None)
 
-    def _run_analysis(self, filepath):
+    def _run_analysis(self, filepath, dwgcheck):
         db_path = get_configured_db_path() or get_db_path()
         while self.tabs.count() > 1:
             self.tabs.removeTab(1)
@@ -624,8 +642,8 @@ class MyWindow(QMainWindow):
             self.original_filepath = None
             return
 
-        import os
-        self.status_label.setText(f'Current File: {os.path.basename(filepath)}\nApp State: File Loaded ✅\nDatabase: {get_configured_db_path() or get_db_path()}')
+        
+        self._update_status('File Loaded ✅', False)
 
         (_, self.on_line_points,
         self.all_lines_table, self.wall_slope_intercept,
@@ -645,21 +663,45 @@ class MyWindow(QMainWindow):
         if len(self.post_rejected_blocks) > 0 or len(self.post_rejected_lines) or len(self.all_fail) > 0:
             self.database_results()
         self.results_summary()
-        QMessageBox.information(None, "Success", f"File loaded:\n{filepath}")      
+
+        if dwgcheck: 
+            QMessageBox.information(None, "Success", f"File loaded:\n{dwgcheck}") 
+        else:    
+            QMessageBox.information(None, "Success", f"File loaded:\n{filepath}")      
 
     def fix_errors(self):
         if not self.original_filepath: 
             QMessageBox.warning(None, "Error", "Please import a file first!")
             return
         
-        output_filepath, _ = QFileDialog.getSaveFileName(
-            None,
-            "Save Corrected DXF File",
-            self.original_filepath.replace('.dxf', '_potential_issues.dxf'),
-            "DXF Files (*.dxf)"
-        )
-        
-        if output_filepath:
+
+        if self.imported_dwg: 
+            output_filepath, _ = QFileDialog.getSaveFileName(
+                None, "View DWG File Issues",
+                self.dwg_original_filepath.replace('.dwg', '_potential_issues.dwg'),
+                "DWG Files (*.dwg)")
+            
+            original_folder = os.path.dirname(self.dwg_original_filepath) #finding the orignal folder name, so we can put new file in it
+
+            flagged_dxf = self.original_filepath  # overwrite the converted DXF in temp with the flagged version
+            update_dxf_in_place(self.original_filepath, flagged_dxf) #creating the flagged dxf, original_filepath is updated and now is the flagged dxf
+            dwg_paths = convertDXF_DWG(self.temp_dir, self.temp_dir, r'C:\Program Files\ODA\ODAFileConverter 26.12.0\ODAFileConverter.exe')
+            print(f'This is dwg paths {dwg_paths}')
+            temp_dwg_filepath = dwg_paths[0]
+
+            file_name = os.path.basename(temp_dwg_filepath) #+ "_potential_issues"
+            name = os.path.splitext(file_name)[0]
+            final_file_name = name + '_potential_issues.dwg'
+
+            destination = os.path.join(original_folder, final_file_name)
+            shutil.move(temp_dwg_filepath, destination)
+
+        if not self.imported_dwg: 
+            output_filepath, _ = QFileDialog.getSaveFileName(
+                None, "View DXF File Issues",
+                self.original_filepath.replace('.dxf', '_potential_issues.dxf'),
+                "DXF Files (*.dxf)"
+    )
             try:
                 # NEW FUNCTION - modifies file in place
                 update_dxf_in_place(self.original_filepath, output_filepath)
@@ -670,12 +712,19 @@ class MyWindow(QMainWindow):
 
     def reset_app(self):
         self.original_filepath = None
+        self.delete_temp_folder()
         
         while self.tabs.count() > 1:
             self.tabs.removeTab(1)
 
         import os
-        self.status_label.setText(f'Current File: None\nApp State: No File Loaded\nDatabase: {get_configured_db_path() or get_db_path()}')
+        self._update_status('No File Loaded', True)
 
         self.summary_container.setVisible(False)
+
+    def delete_temp_folder(self):
+        if hasattr(self, 'temp_dir') and self.temp_dir and os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+            self.temp_dir = None
+        
 
