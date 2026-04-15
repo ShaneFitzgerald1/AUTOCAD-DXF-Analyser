@@ -19,14 +19,14 @@ def get_app_db_path():
     return os.path.join(os.path.dirname(__file__), '..', 'objectdatabase.db')
 
 
-def detect_install_location():
-    """Returns a readable label describing where the app is installed."""
-    if getattr(sys, 'frozen', False):
-        exe_dir = os.path.dirname(sys.executable).upper() #the folder the exe is in 
-        if exe_dir.startswith('S:\\') or exe_dir.startswith('S:/'):
-            return 'Shared Drive (S:\\)'
-        return f'Local Drive ({os.path.dirname(sys.executable)})'
-    return 'Development (VS Code)'
+# def detect_install_location():
+#     """Returns a readable label describing where the app is installed."""
+#     if getattr(sys, 'frozen', False):
+#         exe_dir = os.path.dirname(sys.executable).upper() #the folder the exe is in 
+#         if exe_dir.startswith('S:\\') or exe_dir.startswith('S:/'):
+#             return 'Shared Drive (S:\\)'
+#         return f'Local Drive ({os.path.dirname(sys.executable)})'
+#     return 'Development (VS Code)'
 
 
 class DatabaseDirectoryDialog(BaseDialog):
@@ -37,12 +37,12 @@ class DatabaseDirectoryDialog(BaseDialog):
 
     def buildContent(self, layout: QVBoxLayout) -> None:
         app_db = get_app_db_path()
-        location = detect_install_location()
+        location = DatabaseDirectoryDialog.detect_install_location()
         tabs = QTabWidget()
         directory_widget = QWidget()
         directory_layout = QVBoxLayout(directory_widget)
 
-        title_label = QLabel('Select the Database to acess')
+        title_label = QLabel('Select the Database to access')
         title_label.setFont(QFont('Inter', 11, QFont.Bold))
         title_label.setAlignment(Qt.AlignCenter)
         title_label.setWordWrap(True)
@@ -124,3 +124,12 @@ class DatabaseDirectoryDialog(BaseDialog):
             return
         reinitialise_db(self._pending_path)
         self.accept()
+
+
+    @staticmethod
+    def detect_install_location():
+        """Returns the folder the exe is running from."""
+        if getattr(sys, 'frozen', False):
+            return os.path.dirname(sys.executable)
+        return 'Development (VS Code)'
+

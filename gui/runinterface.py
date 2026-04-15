@@ -9,21 +9,25 @@ from utils import resource_path
 from gui.table_widget import LabeledTableWidget
 from gui.add_object_dialog import AddObjectDialog, database_description
 from gui.edit_database_dialog import EditDialog
-from gui.database_directory import DatabaseDirectoryDialog
+from database.database_directory import DatabaseDirectoryDialog
 from database.db_models import get_configured_db_path, get_db_path
-from gui.convertdwg import convertDWG_DXF, convertDXF_DWG
+from backend.convertdwg import convertDWG_DXF, convertDXF_DWG
+from gui.set_output_file_type import SetOutputFileType
+from backend.output_filepaths import dwg_output
 
 
 class MyWindow(QMainWindow):
     def __init__(self):
-            super(MyWindow, self).__init__()
-            self.setGeometry(0, 0, 1920, 1000)
-            self.setWindowTitle('DXF Analyser')
-            self.setWindowIcon(QIcon(resource_path('mjhlogo.png')))
-            self.original_filepath = None
-            self.initUI()
+        super(MyWindow, self).__init__()
+        self.setGeometry(0, 0, 1920, 1000)
+        self.setWindowTitle('DXF Analyser')
+        self.setWindowIcon(QIcon(resource_path('mjhlogo.png')))
+        self.original_filepath = None
+        self.output_file_type = 'DWG'
+        self.app_state = 'No File Loaded'
+        self.extract_oda_directory()
+        self.initUI()
         
-
     def initUI(self):
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)
@@ -41,7 +45,7 @@ class MyWindow(QMainWindow):
         self.tab1_grid.addWidget(logo_label, 0, 0, 1, 1)  # row 0, col 0
 
         #Instruction label 
-        Instruction = QLabel(f'Import a DXF File to Begin Analysis')
+        Instruction = QLabel(f'Import a DXF/DWG File to Begin Analysis')
         Instruction.setAlignment(Qt.AlignCenter)
         Instruction.setFont(QFont('Inter', 15, QFont.Bold))
         self.tab1_grid.addWidget(Instruction, 0, 0, 1, 3)
@@ -50,7 +54,7 @@ class MyWindow(QMainWindow):
         self.db_path = get_configured_db_path() or get_db_path()
         self.appstatus_vbox = QVBoxLayout()
         self.appstatus_vbox.setAlignment(Qt.AlignTop | Qt.AlignRight)
-        self.status_label = QLabel(f'Current File: None\nApp State: No File Loaded\nDatabase: {self.db_path}')
+        self.status_label = QLabel(f'Current File: None\nApp State: No File Loaded\nDatabase: {self.db_path}\n File Output Type: {self.output_file_type}')
         self.status_label.setAlignment(Qt.AlignRight | Qt.AlignTop)
         self.status_label.setFont(QFont('Inter', 14))
         self.appstatus_vbox.addWidget(self.status_label)
@@ -68,6 +72,7 @@ class MyWindow(QMainWindow):
         self.Button5 = self.create_buttons('Edit Line Category Database', lambda: EditDialog(mode='category', parent=self).exec_(), purple_vbox, purple_style)
         self.Button6 = self.create_buttons('Set Database Directory', self._open_directory_dialog, purple_vbox, purple_style)
         self.Button7 = self.create_buttons('Database Description', lambda: database_description(parent=self).exec_(), purple_vbox, purple_style)
+        self.Button8 = self.create_buttons('Set Output File Type', self._open_output_type_dialog, purple_vbox, "QPushButton {background-color: #1E90FF; color: white;} QPushButton:hover{background-color: #1278D4;}")
         purple_hbox.addLayout(purple_vbox)
         self.tab1_grid.addLayout(purple_hbox, 1, 0, 1, 3)
         
@@ -436,7 +441,6 @@ class MyWindow(QMainWindow):
         vbox1.addWidget(QMLabel)
         vbox1.addWidget(QtitLabel)
 
-   
         hboxgeo1.addLayout(vboxgeo1)
         hboxgeo1.addLayout(vboxgeo2)
 
@@ -561,25 +565,29 @@ class MyWindow(QMainWindow):
         self.table3.populate(self.all_lines_table)
         self.table4.populate(self.filtered_walls)      
    
-    def _update_status(self, app_state, reset):
-        import os
+    def _update_status(self, app_state=None, reset=False):
+        if app_state is not None:
+            self.app_state = app_state
+
         display_path = getattr(self, 'display_filepath', self.original_filepath)
         current_file = os.path.basename(display_path) if display_path else 'None'
         name = os.path.splitext(current_file)[0]
         db_path = get_configured_db_path() or get_db_path()
-        if reset is True: 
 
+        if reset:
+            self.app_state = 'No File Loaded'
             self.status_label.setText(
-            f'Current File: {None}\n'
-            f'App State: {app_state}\n'
-            f'Database: {db_path}'
-        )
-        
-        else: 
+                f'Current File: None\n'
+                f'App State: No File Loaded\n'
+                f'Database: {db_path}\n'
+                f'File Output Type: {self.output_file_type}'
+            )
+        else:
             self.status_label.setText(
                 f'Current File: {name}\n'
-                f'App State: {app_state}\n'
-                f'Database: {db_path}'
+                f'App State: {self.app_state}\n'
+                f'Database: {db_path}\n'
+                f'File Output Type: {self.output_file_type}'
             )
 
     def import_dxf_file(self):
@@ -608,10 +616,10 @@ class MyWindow(QMainWindow):
             shutil.copy2(filepath, temp_filepath)
             self.dwg_original_filepath = filepath #setting the original filepath of the dwg for later 
 
-            dxf_paths = convertDWG_DXF(self.temp_dir, self.temp_dir, r'C:\Program Files\ODA\ODAFileConverter 26.12.0\ODAFileConverter.exe')
-            dwg_conv_dxf_filepath = dxf_paths[0]
-            self.original_filepath = dwg_conv_dxf_filepath  # used for analysis
-            self._run_analysis(dwg_conv_dxf_filepath, filepath)
+            dxf_paths = convertDWG_DXF(self.temp_dir, self.temp_dir, self.oda_dir)
+            self.dwg_conv_dxf_filepath = dxf_paths[0]
+            self.original_filepath = filepath  # used for analysis
+            self._run_analysis(self.dwg_conv_dxf_filepath, filepath)
             self.imported_dwg = True 
 
         return filepath
@@ -622,12 +630,31 @@ class MyWindow(QMainWindow):
         dialog.exec_()
         self.update_status_location()
 
+    def _open_output_type_dialog(self):
+        """Finds out what the selected output path is by the user """
+        dialog = SetOutputFileType(current_type=self.output_file_type, parent=self)
+        if dialog.exec_() == SetOutputFileType.Accepted:
+            self.output_file_type = dialog.collectResult()
+            self._update_status()
+            self.reload_file()
+
+
     def update_status_location(self):
         self._update_status('File Loaded ✅' if self.original_filepath else 'No File Loaded', False)
 
     def reload_file(self):
-        if self.original_filepath:
+        if self.imported_dwg:
+            self.delete_temp_folder()
+            self.temp_dir = tempfile.mkdtemp()
+            filename = os.path.basename(self.dwg_original_filepath)
+            temp_filepath = os.path.join(self.temp_dir, filename)
+            shutil.copy2(self.dwg_original_filepath, temp_filepath)
+            dxf_paths = convertDWG_DXF(self.temp_dir, self.temp_dir, self.oda_dir)
+            self.dwg_conv_dxf_filepath = dxf_paths[0]
+            self._run_analysis(self.dwg_conv_dxf_filepath, self.dwg_original_filepath)
+        elif self.original_filepath:
             self._run_analysis(self.original_filepath, None)
+
 
     def _run_analysis(self, filepath, dwgcheck):
         db_path = get_configured_db_path() or get_db_path()
@@ -664,51 +691,55 @@ class MyWindow(QMainWindow):
             self.database_results()
         self.results_summary()
 
-        if dwgcheck: 
-            QMessageBox.information(None, "Success", f"File loaded:\n{dwgcheck}") 
-        else:    
-            QMessageBox.information(None, "Success", f"File loaded:\n{filepath}")      
+        # if dwgcheck: 
+        #     QMessageBox.information(None, "Success", f"File loaded:\n{dwgcheck}") 
+        # else:    
+        #     QMessageBox.information(None, "Success", f"File loaded:\n{filepath}")  
 
+    def extract_oda_directory(self):
+        exe_dir = DatabaseDirectoryDialog.detect_install_location()
+        if exe_dir == 'Development (VS Code)':
+            self.oda_dir = r'C:\Program Files\ODA\ODAFileConverter 26.12.0\ODAFileConverter.exe'
+        else:
+            self.oda_dir = os.path.join(exe_dir, 'DO_NOT_TOUCH', 'ODAFileConverter 26.12.0', 'ODAFileConverter.exe')
+    
+    
     def fix_errors(self):
-        if not self.original_filepath: 
+        if not self.original_filepath: #If there is no file imported 
             QMessageBox.warning(None, "Error", "Please import a file first!")
             return
-        
 
-        if self.imported_dwg: 
-            output_filepath, _ = QFileDialog.getSaveFileName(
-                None, "View DWG File Issues",
-                self.dwg_original_filepath.replace('.dwg', '_potential_issues.dwg'),
-                "DWG Files (*.dwg)")
+        if self.imported_dwg: #if a dwg was imported 
             
-            original_folder = os.path.dirname(self.dwg_original_filepath) #finding the orignal folder name, so we can put new file in it
+            if self.output_file_type == 'DWG':
+                #call function to output dwg
+                dwg_output(self.dwg_original_filepath, self.dwg_conv_dxf_filepath, self.temp_dir, self.oda_dir, 'DWG')
 
-            flagged_dxf = self.original_filepath  # overwrite the converted DXF in temp with the flagged version
-            update_dxf_in_place(self.original_filepath, flagged_dxf) #creating the flagged dxf, original_filepath is updated and now is the flagged dxf
-            dwg_paths = convertDXF_DWG(self.temp_dir, self.temp_dir, r'C:\Program Files\ODA\ODAFileConverter 26.12.0\ODAFileConverter.exe')
-            print(f'This is dwg paths {dwg_paths}')
-            temp_dwg_filepath = dwg_paths[0]
-
-            file_name = os.path.basename(temp_dwg_filepath) #+ "_potential_issues"
-            name = os.path.splitext(file_name)[0]
-            final_file_name = name + '_potential_issues.dwg'
-
-            destination = os.path.join(original_folder, final_file_name)
-            shutil.move(temp_dwg_filepath, destination)
+            if self.output_file_type == 'DXF':  #same process just keeping the file as a dxf 
+                dwg_output(self.dwg_original_filepath, self.dwg_conv_dxf_filepath, self.temp_dir, self.oda_dir, 'DXF')
 
         if not self.imported_dwg: 
-            output_filepath, _ = QFileDialog.getSaveFileName(
-                None, "View DXF File Issues",
-                self.original_filepath.replace('.dxf', '_potential_issues.dxf'),
-                "DXF Files (*.dxf)"
-    )
-            try:
-                # NEW FUNCTION - modifies file in place
-                update_dxf_in_place(self.original_filepath, output_filepath)
-                QMessageBox.information(None, "Success", f"Corrections applied and saved to:\n{output_filepath}")
-                
-            except Exception as e:
-                QMessageBox.critical(None, "Error", f"Failed to apply corrections:\n{str(e)}")
+            if self.output_file_type == 'DXF':
+                #This part doesn't use a temporary directory, so its easier to just hard code it then making 
+                # a case for it in the function
+
+                output_filepath, _ = QFileDialog.getSaveFileName(
+                    None, "View DXF File Issues",
+                    self.original_filepath.replace('.dxf', '_potential_issues.dxf'),
+                    "DXF Files (*.dxf)")
+                try:
+                    # NEW FUNCTION - modifies file in place
+                    update_dxf_in_place(self.original_filepath, output_filepath)
+                    QMessageBox.information(None, "Success", f"Potential mistakes saved to:\n{output_filepath}")
+                    
+                except Exception as e:
+                    QMessageBox.critical(None, "Error", f"Failed to create file:\n{str(e)}")
+
+            if self.output_file_type == 'DWG': 
+                #call function to output dwg 
+                dwg_output(self.original_filepath, self.original_filepath, None, self.oda_dir, 'DWG')
+
+        
 
     def reset_app(self):
         self.original_filepath = None

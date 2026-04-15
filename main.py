@@ -2,7 +2,7 @@ import sys
 from PyQt5.QtWidgets import QApplication
 from gui.runinterface import MyWindow
 from database.db_models import get_configured_db_path
-from gui.database_directory import DatabaseDirectoryDialog
+from database.database_directory import DatabaseDirectoryDialog
 from PyQt5.QtCore import QTimer
 
 if __name__ == '__main__':
