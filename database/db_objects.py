@@ -1,5 +1,6 @@
 from database.db_models import Session, ObjectID, CategoryLineRule
 from backend.mathematical import Mathematical
+from database.tolerance_config import extract_values_from_tolerance_sets
 maths = Mathematical()
 
 def get_catalogue():
@@ -33,16 +34,14 @@ def get_category_catalogue():
     finally:
         session.close()   
 
-# categories = get_category_catalogue() 
-# print(f'These are the categories {categories}')
-
-       
-
 
 def name_match_block(blockrefs, lines, actual_type, wall_slopes, wall_intercepts, all_walls, line_refs): 
-    blocks = maths.Channel_check_block(wall_slopes, wall_intercepts, blockrefs)
+    block_tol, _, _ = extract_values_from_tolerance_sets()
+    blocks = maths.Channel_check_block(wall_slopes, wall_intercepts, blockrefs, block_tol)
 
-    _, _, _, _, lines_cl = maths.Chanel_check_line(wall_slopes, wall_intercepts, lines, all_walls, line_refs)
+    _, _, _, _, lines_cl, ordered_refs = maths.Chanel_check_line(wall_slopes, wall_intercepts, lines, all_walls, line_refs)
+
+    # print(f'These are the ordered lines sit {ordered_refs}')
     objects = get_catalogue()
     accepted_block_names = []
     rejected_block_names = []
@@ -50,12 +49,11 @@ def name_match_block(blockrefs, lines, actual_type, wall_slopes, wall_intercepts
     rejected_line_names = []
     blockname_unmatched = []
     linename_unmatched = []
-
+    object_rej_line_refs = []
 
     # Build lookup lists from catalogue
     valid_insert_names = []
     valid_line_names = []
-
 
     # print(f'Amount of objects {len(objects)}')
 
@@ -93,10 +91,10 @@ def name_match_block(blockrefs, lines, actual_type, wall_slopes, wall_intercepts
             if not name_matched:
                 blockname_unmatched.append(actual_name)
 
-        return accepted_block_names, rejected_block_names, blockname_unmatched
+        return accepted_block_names, rejected_block_names, blockname_unmatched, object_rej_line_refs
 
     if actual_type == 'LINE':
-        for line in lines_cl:
+        for idx, line in enumerate(lines_cl):
             actual_l_name, x_s, y_s, x_e, y_e, on_channel = line
             line_name_matched = False
             channel_verified = False
@@ -121,13 +119,18 @@ def name_match_block(blockrefs, lines, actual_type, wall_slopes, wall_intercepts
                 accepted_line_names.append(actual_l_name)
             if line_name_matched and not channel_verified:
                 rejected_line_names.append([actual_l_name, x_s, y_s, x_e, y_e, 'Line rejected due to not being in expected position'])
+                object_rej_line_refs.append(ordered_refs[idx])
             if not line_name_matched and not channel_verified:
                 rejected_line_names.append([actual_l_name, x_s, y_s, x_e, y_e, f'Line rejected: {actual_l_name} is not present in the DataBase'])
-            if not line_name_matched:
+                object_rej_line_refs.append(ordered_refs[idx])
+            if not line_name_matched and channel_verified:
                 rejected_line_names.append([actual_l_name, x_s, y_s, x_e, y_e, f'Line rejected: {actual_l_name} is not present in the DataBase'])
-                linename_unmatched.append(actual_l_name)
+                object_rej_line_refs.append(ordered_refs[idx])
+            if not line_name_matched:    
+                linename_unmatched.append(actual_l_name) 
  
-        return accepted_line_names, rejected_line_names, linename_unmatched
+        # print(f'These are the line refs: {object_rej_line_refs}')
+        return accepted_line_names, rejected_line_names, linename_unmatched, object_rej_line_refs
     
 
 def before_after(fixed_all_blocks, blockrefs, lines, correct_lines, fixed_lines, wall_slopes, wall_intercepts, all_walls, line_refs):
@@ -148,16 +151,18 @@ def before_after(fixed_all_blocks, blockrefs, lines, correct_lines, fixed_lines,
             sort_blockrefs.append([name, x, y, angle, name_error])    
 
     #All accepted and rejected blocks post check, if an error arised here this is a big issue
-    post_accepted_block, post_rejected_block, blockname_unmatched = name_match_block(fixed_all_blocks, all_correct_lines, 'INSERT', wall_slopes, wall_intercepts, all_walls, line_refs)
-    post_accepted_line, post_rejected_lines, linename_unmatched = name_match_block(fixed_all_blocks, all_correct_lines, 'LINE', wall_slopes, wall_intercepts, all_walls, line_refs)
+    post_accepted_block, post_rejected_block, blockname_unmatched, _ = name_match_block(fixed_all_blocks, all_correct_lines, 'INSERT', wall_slopes, wall_intercepts, all_walls, line_refs)
+    post_accepted_line, post_rejected_lines, linename_unmatched, rej_line_refs = name_match_block(fixed_all_blocks, all_correct_lines, 'LINE', wall_slopes, wall_intercepts, all_walls, line_refs)
 
-
-    return post_accepted_block, post_accepted_line, post_rejected_block, post_rejected_lines, blockname_unmatched, linename_unmatched
+    return post_accepted_block, post_accepted_line, post_rejected_block, post_rejected_lines, blockname_unmatched, linename_unmatched, rej_line_refs
 
 
 
 def categories_sorter(line_connections): 
     category_list = [] 
+
+    # print(f'The amount of line connections {len(line_connections)}')
+    # print(f'These are the line line connections {line_connections}')
 
     for line in line_connections: 
         line_name, line_start_entity, line_end_entity, x_start, y_start, x_end, y_end = line 
@@ -188,19 +193,22 @@ def get_category(line_name):
     return None 
 
 
-def validate_categories(line_line_connections, line_block_connections):
+def validate_categories(line_line_connections, line_block_connections, line_line_refs, line_block_refs):
+
     categories = get_category_catalogue() 
 
     ll_connections = categories_sorter(line_line_connections)
     lb_connections = categories_sorter(line_block_connections)
     all_connections = ll_connections + lb_connections
+    all_refs = line_line_refs + line_block_refs
 
     correct_connections_cat = []
     mand_fail = []
     quantity_fail = []
     both_fail = []
+    error_refs = []
 
-    for line in all_connections: 
+    for idx, line in enumerate(all_connections): 
         line_name, line_category, line_start_category, line_end_category, x_start, y_start, x_end, y_end = line #lines being checked 
         safe_connections = False 
         safe_connections_start = False 
@@ -216,10 +224,12 @@ def validate_categories(line_line_connections, line_block_connections):
                 allowed_list = [] 
 
             if cat == line_category: 
-                if line_start_category in allowed_list and line_end_category in allowed_list:  
-                    safe_connections = True 
+                if line_start_category in allowed_list: #and line_end_category in allowed_list:  
                     safe_connections_start = True 
-                    safe_connections_end = True 
+                    # safe_connections_end = True 
+
+                if line_end_category in allowed_list: 
+                    safe_connections_end = True     
                 
                 if line_category == 'TRUSS LINE': 
                     if line_start_category is None or line_end_category is None: 
@@ -267,26 +277,30 @@ def validate_categories(line_line_connections, line_block_connections):
         if safe_connections_start and safe_connections_end and not untrue_quantity_connections: 
             correct_connections_cat.append([line_name])  
         if not safe_connections_start and safe_connections_end and not untrue_quantity_connections: 
-            mand_fail.append([line_name, x_start, y_start, line_start_category, x_end, y_end, line_end_category, f'{line_name} start is at/on an incorrect line, object, or position.'])
+            mand_fail.append([line_name, x_start, y_start, line_start_category, None, None, line_end_category, f'{line_name} start is at/on an incorrect line, object, or position.'])
+            error_refs.append(all_refs[idx])
         if safe_connections_start and not safe_connections_end and not untrue_quantity_connections: 
-            mand_fail.append([line_name, x_start, y_start, line_start_category, x_end, y_end, line_end_category, f'{line_name} end is at/on an incorrect line, object, or position.'])   
+            mand_fail.append([line_name, None, None, line_start_category, x_end, y_end, line_end_category, f'{line_name} end is at/on an incorrect line, object, or position.'])
+            error_refs.append(all_refs[idx])   
         if not safe_connections_start and not safe_connections_end and not untrue_quantity_connections: 
             mand_fail.append([line_name, x_start, y_start, line_start_category, x_end, y_end, line_end_category, f'{line_name} start and end is at/on an incorrect line, object, or position.'])   
-
+            error_refs.append(all_refs[idx])
 
         if safe_connections_start and safe_connections_end and untrue_quantity_connections: 
-            quantity_fail.append([line_name, x_start, y_start, line_start_category, x_end, y_end, line_end_category, f'{line_name} must end on the specified object.'])
-            
+            quantity_fail.append([line_name, x_start, y_start, line_start_category, x_end, y_end, line_end_category, f'{line_name} must start/end on the specified object.'])
+            error_refs.append(all_refs[idx])
         if not safe_connections_start and safe_connections_end and untrue_quantity_connections: 
-            both_fail.append([line_name, x_start, y_start, line_start_category, x_end, y_end, line_end_category, f'{line_name} start is incorrect or does not end on the required object.'])
+            both_fail.append([line_name, x_start, y_start, line_start_category, None, None, line_end_category, f'{line_name} start is incorrect or does not end on the required object.'])
+            error_refs.append(all_refs[idx])
         if safe_connections_start and not safe_connections_end and untrue_quantity_connections: 
-            both_fail.append([line_name, x_start, y_start, line_start_category, x_end, y_end, line_end_category, f'{line_name} end is incorrect or does not end on the required object.'])
+            both_fail.append([line_name, None, None, line_start_category, x_end, y_end, line_end_category, f'{line_name} end is incorrect or does not end on the required object.'])
+            error_refs.append(all_refs[idx])
         if not safe_connections_start and not safe_connections_end and untrue_quantity_connections: 
             both_fail.append([line_name, x_start, y_start, line_start_category, x_end, y_end, line_end_category, f'{line_name} start and end is incorrect or does not end on the required object.'])
-       
-    all_fail_cat = mand_fail + quantity_fail + both_fail 
+            error_refs.append(all_refs[idx])
 
-    return correct_connections_cat, all_fail_cat
+    all_fail_cat = mand_fail + quantity_fail + both_fail 
+    return correct_connections_cat, all_fail_cat, error_refs
 
 def dxf_mistake_block_explained(mistake_exp): 
     categories = get_category_catalogue() 

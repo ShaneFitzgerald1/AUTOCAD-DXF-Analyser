@@ -32,6 +32,8 @@ class BaseTable(QTableWidget):
         self.setRowCount(len(content))
         for row, row_data in enumerate(content): #for row in all the data number the rows 
             for col, value in enumerate(row_data): #take each row and match it witha column 
-                self.setItem(row, col, QTableWidgetItem(str(value)))
+                item = QTableWidgetItem(str(value))
+                item.setTextAlignment(QtCore.Qt.AlignCenter)
+                self.setItem(row, col, item)
 
 

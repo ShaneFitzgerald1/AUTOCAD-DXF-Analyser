@@ -2,7 +2,7 @@ import sys, tempfile, shutil, os
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtGui import QFont, QPixmap, QIcon
 from PyQt5.QtCore import Qt 
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QGridLayout, QTableWidget, QLabel, QSizePolicy, QHeaderView, QMessageBox, QFileDialog, QTableWidgetItem, QPushButton, QHBoxLayout, QTabWidget
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QGridLayout, QTableWidget, QLabel, QSizePolicy, QHeaderView, QMessageBox, QFileDialog, QTableWidgetItem, QPushButton, QHBoxLayout, QTabWidget, QAction
 from backend.autocorrect import *
 from gui.base_table import BaseTable
 from utils import resource_path
@@ -14,20 +14,21 @@ from database.db_models import get_configured_db_path, get_db_path
 from backend.convertdwg import convertDWG_DXF, convertDXF_DWG
 from gui.set_output_file_type import SetOutputFileType
 from backend.output_filepaths import dwg_output
-
+from gui.edit_tolerance_dialog import edit_tolerences
 
 class MyWindow(QMainWindow):
     def __init__(self):
         super(MyWindow, self).__init__()
         self.setGeometry(0, 0, 1920, 1000)
-        self.setWindowTitle('DXF Analyser')
+        self.setWindowTitle('Drawing Analyser')
         self.setWindowIcon(QIcon(resource_path('mjhlogo.png')))
         self.original_filepath = None
         self.output_file_type = 'DWG'
         self.app_state = 'No File Loaded'
         self.extract_oda_directory()
         self.initUI()
-        
+
+    
     def initUI(self):
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)
@@ -72,7 +73,6 @@ class MyWindow(QMainWindow):
         self.Button5 = self.create_buttons('Edit Line Category Database', lambda: EditDialog(mode='category', parent=self).exec_(), purple_vbox, purple_style)
         self.Button6 = self.create_buttons('Set Database Directory', self._open_directory_dialog, purple_vbox, purple_style)
         self.Button7 = self.create_buttons('Database Description', lambda: database_description(parent=self).exec_(), purple_vbox, purple_style)
-        self.Button8 = self.create_buttons('Set Output File Type', self._open_output_type_dialog, purple_vbox, "QPushButton {background-color: #1E90FF; color: white;} QPushButton:hover{background-color: #1278D4;}")
         purple_hbox.addLayout(purple_vbox)
         self.tab1_grid.addLayout(purple_hbox, 1, 0, 1, 3)
         
@@ -125,6 +125,45 @@ class MyWindow(QMainWindow):
 
         self.tab1.setLayout(self.tab1_grid)
         self.tabs.addTab(self.tab1, "Import")
+
+        self.set_correct_tab_colour(self.tab1)
+
+
+        menubar = self.menuBar()
+        self.setStyleSheet("QMainWindow { background-color: black; }")
+
+        
+        menubar.setStyleSheet("""
+            QMenuBar {background-color: black;
+                color: white;}QMenuBar::item:selected {
+                background-color: #333333;}""")
+        
+        self.tabs.setStyleSheet("""
+        QTabBar {
+            background-color: black;
+        }
+        QTabBar::tab {
+            background-color: #cccccc;
+            color: black;
+            padding: 4px 10px;
+        }
+        QTabBar::tab:selected {
+            background-color: white;
+            color: black;
+        }
+        QTabWidget::pane {
+            background-color: white;
+        }
+    """)
+
+        output_action = QAction('Set Output File Type', self)
+        output_action.triggered.connect(self._open_output_type_dialog)
+        menubar.addAction(output_action)
+
+        tolerance_action = QAction('Adjust Tolerances', self)
+        tolerance_action.triggered.connect(self._open_tolerance_dialog)
+        menubar.addAction(tolerance_action)
+
 
     def create_buttons(self, Text, command, box: QHBoxLayout, Colour): 
         Button = QPushButton()
@@ -182,6 +221,9 @@ class MyWindow(QMainWindow):
         self.tabs.addTab(tab2, "Results") #add tab 2 to the widget
         
         self.populate_results_table()
+
+        #OCD, setting each tab to a specific colour of white 
+        self.set_correct_tab_colour(tab2)
         
         # self.tabs.setCurrentIndex(1) # swapping to results tab
 
@@ -231,9 +273,10 @@ class MyWindow(QMainWindow):
             grid.addLayout(vbox5, 2, 0, 1, 2)
             self.tabledup.populate(self.line_duplicate_points)    
 
-    
+        self.set_correct_tab_colour(tab3)
         tab3.setLayout(grid)
         self.tabs.addTab(tab3, "Error Fixation") 
+
    
 
     def database_results(self): 
@@ -324,7 +367,7 @@ class MyWindow(QMainWindow):
             vbox1.addWidget(add_btn, alignment=Qt.AlignLeft)
 
         tab4.setLayout(grid)
-
+        self.set_correct_tab_colour(tab4)
         self.tabs.addTab(tab4, "Database Results")
 
 
@@ -333,6 +376,12 @@ class MyWindow(QMainWindow):
     check = "\u2705"      # ✅
     cross = "\u274C"      # ❌
     warning = "\u26A0"    # ⚠
+
+    def set_correct_tab_colour(self, tab): 
+        tab.setAutoFillBackground(True)
+        palette = tab.palette()
+        palette.setColor(palette.Window, QtGui.QColor('white'))
+        tab.setPalette(palette)
 
     def _open_add_object_dialog(self, names):
         dlg = AddObjectDialog(names, parent=self)
@@ -600,7 +649,6 @@ class MyWindow(QMainWindow):
 
         filepath, _ = QFileDialog.getOpenFileName(None, "Select DXF File", "", "DXF Files (*.dxf *.dwg);;All Files (*)")
         ext = filepath[-3:].lower()
-        print(f'This is the ext {ext}')
 
         if filepath and ext == 'dxf':
             self.original_filepath = filepath
@@ -636,14 +684,25 @@ class MyWindow(QMainWindow):
         if dialog.exec_() == SetOutputFileType.Accepted:
             self.output_file_type = dialog.collectResult()
             self._update_status()
-            self.reload_file()
+            if self.original_filepath is None: 
+                return
+            if self.original_filepath is not None: 
+                self.reload_file()
 
+
+    def _open_tolerance_dialog(self):
+        dialog = edit_tolerences(parent=self)
+        if dialog.exec_() == edit_tolerences.Accepted:
+            if self.original_filepath:
+                self.reload_file()
+            
+      
 
     def update_status_location(self):
         self._update_status('File Loaded ✅' if self.original_filepath else 'No File Loaded', False)
 
     def reload_file(self):
-        if self.imported_dwg:
+        if getattr(self, 'imported_dwg', False):
             self.delete_temp_folder()
             self.temp_dir = tempfile.mkdtemp()
             filename = os.path.basename(self.dwg_original_filepath)
@@ -681,7 +740,7 @@ class MyWindow(QMainWindow):
         self.post_rejected_blocks, self.post_rejected_lines,
         self.line_name, self.all_fail, self.blocks_fil, self.bed_check,
         self.fixed_lines, self.fixed_line_refs, self.all_walls, self.wall_point_refs, self.bedit_mistake_points,
-        self.bedit_corrected_blocks, _, _, self.blockname_unmatched, self.linename_unmatched) = result
+        self.bedit_corrected_blocks, _, _, self.blockname_unmatched, self.linename_unmatched, _, _) = result
 
         self.create_results_tab()
 
@@ -703,7 +762,7 @@ class MyWindow(QMainWindow):
         else:
             self.oda_dir = os.path.join(exe_dir, 'DO_NOT_TOUCH', 'ODAFileConverter 26.12.0', 'ODAFileConverter.exe')
     
-    
+                                                        
     def fix_errors(self):
         if not self.original_filepath: #If there is no file imported 
             QMessageBox.warning(None, "Error", "Please import a file first!")

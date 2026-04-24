@@ -7,7 +7,6 @@ from PyQt5.QtCore import QTimer
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-
     win = MyWindow()
     win.show()
 

@@ -133,7 +133,7 @@ class Mathematical:
         return float(solution[x]), float(solution[y])
     
     @staticmethod
-    def Channel_check_block(wall_slopes, wall_intercepts, blockrefs): 
+    def Channel_check_block(wall_slopes, wall_intercepts, blockrefs, block_tol): 
         blocks = []
 
         for block in blockrefs: 
@@ -147,12 +147,12 @@ class Mathematical:
                 if wall_slope is None: 
                     x_intercept = float(wall_intercept.split()[2])
                     x_d = abs(x_intercept - x)
-                    if x_d < 1: 
+                    if x_d < block_tol: 
                         on_channel = 'Yes'
                         break       
                 else: 
                     y_d = abs(y - (wall_slope * x + wall_intercept))
-                    if y_d < 1: 
+                    if y_d < block_tol: 
                         on_channel = 'Yes'
                         break 
 
@@ -161,11 +161,13 @@ class Mathematical:
 
     @staticmethod
     def Chanel_check_line(wall_slopes, wall_intercepts, lines, all_walls, line_refs): 
+
         lines_OCO = []
         lines_OCO_refs = []
         lines_not_OCO = []
         lines_not_OCO_refs = []
         lines_cl = []
+        ordered_refs = []
 
 
         for idx, line in enumerate(lines): 
@@ -182,7 +184,6 @@ class Mathematical:
                 lines_not_OCO.append([name, x_start, y_start, x_end, y_end, offset])
                 lines_not_OCO_refs.append(line_refs[idx])
                 lines_cl.append([name, x_start, y_start, x_end, y_end, 'No'])
-                
                 continue
             on_channel_outline = False 
 
@@ -206,18 +207,23 @@ class Mathematical:
                         on_channel_outline = True 
                         break
 
-            if on_channel_outline: 
+            if on_channel_outline:
                 lines_OCO.append([name, x_start, y_start, x_end, y_end, offset])
-                lines_OCO_refs.append(line_refs[idx]) 
+                lines_OCO_refs.append(line_refs[idx])
                 lines_cl.append([name, x_start, y_start, x_end, y_end, 'Yes'])
-            else: 
-                lines_not_OCO.append([name, x_start, y_start, x_end, y_end, offset]) 
-                lines_not_OCO_refs.append(line_refs[idx])   
-                lines_cl.append([name, x_start, y_start, x_end, y_end, 'No'])     
+            else:
+                lines_not_OCO.append([name, x_start, y_start, x_end, y_end, offset])
+                lines_not_OCO_refs.append(line_refs[idx])
+                lines_cl.append([name, x_start, y_start, x_end, y_end, 'No'])
 
-        # print(f'These are lines not OCO {lines_not_OCO}')        
-                
-        return lines_OCO, lines_not_OCO, lines_OCO_refs, lines_not_OCO_refs, lines_cl                  
+        ordered_refs = lines_OCO_refs + lines_not_OCO_refs
+
+        # print(f'Lines oco {lines_OCO_refs}')
+        # print(f'Lines not OCO {lines_not_OCO_refs}')
+
+        # print(f'These are the ordered refs beforehand {ordered_refs}')
+
+        return lines_OCO, lines_not_OCO, lines_OCO_refs, lines_not_OCO_refs, lines_cl, ordered_refs                
             
     @staticmethod
     def return_error(final_corrected_blocks, mistake_points):
