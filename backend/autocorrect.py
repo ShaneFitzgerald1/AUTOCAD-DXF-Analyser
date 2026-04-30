@@ -12,7 +12,7 @@ from backend.mathematical import Mathematical
 from backend.guipresentation import presentation
 from backend.datafiltration import datafiltration
 from database.db_objects import before_after, validate_categories, dxf_mistake_block_explained, dxf_mistake_line_explained
-from database.tolerance_config import extract_values_from_tolerance_sets
+from database.tolerance_config import extract_values_from_tolerance_sets, extract_boundary_values
 
 maths = Mathematical()
 pres = presentation() 
@@ -32,7 +32,6 @@ def autocad_points(filepath):
     all_lines = []
     all_walls = []  
     insert_refs = []
-    line_refs = []
     block_names = []
     new_names = []
     layers = []
@@ -45,7 +44,8 @@ def autocad_points(filepath):
         y = round(insert.dxf.insert.y, 2)
         block_length.append([blockName, x, y]) 
 
-    blocks_fil = maths.blockcheck(block_length)
+    x_min, x_max, y_min, y_max = extract_boundary_values()
+    blocks_fil = maths.blockcheck(block_length, x_min, x_max, y_min, y_max)
 
     for insert in msp.query('INSERT'): 
         blockName = insert.dxf.name
@@ -113,18 +113,17 @@ def autocad_points(filepath):
                     if new_name == name:
                         name_error = None
                     insert_refs.append(entity)  
-                    Blockref_Points.append([new_name, x_final, y_final, angle, name])
+                    Blockref_Points.append([new_name, x_final, y_final, angle, name, entity])
 
 
                 elif entity.dxftype() == 'LINE':
-                    line_refs.append(entity)
                     layer = entity.dxf.layer
                     start_x = round(x + entity.dxf.start.x, 2)
                     start_y = round(y + entity.dxf.start.y, 2)
                     end_x = round(x + entity.dxf.end.x, 2)
                     end_y = round(y + entity.dxf.end.y, 2)
                     layers.append([layer])
-                    all_lines.append([layer, start_x, start_y, end_x, end_y, True])
+                    all_lines.append([layer, start_x, start_y, end_x, end_y, True, entity])
 
                 elif entity.dxftype() == 'LWPOLYLINE':
                     if entity.dxf.layer == 'CHANNEL OUTLINE':   # add layer filter
@@ -162,13 +161,12 @@ def autocad_points(filepath):
                     attrib_data[attrib.dxf.tag] = attrib.dxf.text 
                 
             if offset_found: 
-                Blockref_Points.append([new_name, x_final, y_final, angle, name])
+                Blockref_Points.append([new_name, x_final, y_final, angle, name, insert])
             else:     
-                Blockref_Points.append([name, x, y, angle, name_error])  
+                Blockref_Points.append([name, x, y, angle, name_error, insert])  
         
     if bedit_check != 1: 
         for line in msp.query('LINE'):
-            line_refs.append(line)
             layer = line.dxf.layer
             name = blockName 
             start_x = round(line.dxf.start.x, 2)
@@ -176,7 +174,7 @@ def autocad_points(filepath):
             end_x = round(line.dxf.end.x, 2)
             end_y = round(line.dxf.end.y, 2)
             layers.append([layer])
-            all_lines.append([layer, start_x, start_y, end_x, end_y, False])    
+            all_lines.append([layer, start_x, start_y, end_x, end_y, False, line])    
 
         # Extract POLYLINE data 
         for polyline in msp.query('LWPOLYLINE[layer=="CHANNEL OUTLINE"]'):
@@ -188,39 +186,40 @@ def autocad_points(filepath):
         return None 
 
     else: 
-        wall_lengths = maths.wall_len(all_lines)  
-        slopes, y_intercepts, line_properties, wall_slopes, wall_intercepts = maths.slope_values(all_lines, all_walls) 
+        x_min, x_max, y_min, y_max = extract_boundary_values()
+        filtered_lines = maths.filter_lines(all_lines, x_min, x_max, y_min, y_max)
+        filtered_blockref, filtered_walls = maths.Shape_outline(Blockref_Points, all_walls, x_min, x_max, y_min, y_max)
+
+        wall_lengths = maths.wall_len(filtered_lines)  
+        slopes, y_intercepts, line_properties, wall_slopes, wall_intercepts = maths.slope_values(filtered_lines, filtered_walls) 
         wall_slope_intercept = pres.combine_slope_walls(wall_lengths, slopes, y_intercepts)
 
         block_tolerance, line_tolerance1, line_tolerance2 = extract_values_from_tolerance_sets()
 
-        (blocks_on_line, mistake_points, final_corrected_blocks,
-        final_corrected_block_refs, filtered_walls, 
+        (blocks_on_line, mistake_points, final_corrected_blocks, filtered_walls,
         correct_blocks, fixed_all_blocks, bedit_mistake_points,
-        bedit_corrected_blocks, mistake_exp) = filter.On_Channel_Line(Blockref_Points, all_walls, insert_refs, line_properties, bedit_check, block_tolerance, tolerance2=5)
-        on_line_points, all_lines_table = pres.what_line(blocks_on_line, filtered_walls, all_lines, tolerance = 1)
-        (line_mistakes, correct_lines, line_mistake_refs, 
-        correct_line_refs, line_line_connections, line_line_connections_check,
-        correct_not_OCO_refs) = filter.find_line_error(all_lines, all_walls, line_refs, line_properties, wall_slopes, wall_intercepts, line_tolerance1, 25, line_tolerance2)
-        fixed_lines, fixed_lines_box, line_mistake_refs, line_mistake_exp = filter.fix_line_mistakes(line_mistakes, line_mistake_refs)
+        bedit_corrected_blocks, mistake_exp) = filter.On_Channel_Line(Blockref_Points, all_walls, line_properties, bedit_check, block_tolerance, tolerance2=5, x_min=x_min, x_max=x_max, y_min=y_min, y_max=y_max)
+        
+        on_line_points, all_lines_table = pres.what_line(blocks_on_line, filtered_walls, filtered_lines, tolerance = 1)
+        (line_mistakes, correct_lines, 
+         line_line_connections, line_line_connections_check) = filter.find_line_error(all_lines, all_walls, line_properties, wall_slopes, wall_intercepts, line_tolerance1, 25, line_tolerance2, x_min, x_max, y_min, y_max)
+        fixed_lines, fixed_lines_box, line_mistake_exp = filter.fix_line_mistakes(line_mistakes)
 
-        (final_fixed_lines, final_correct_lines, 
-         final_fixed_lines_refs, final_correct_line_refs) = filter.filter_offset_lines(line_mistake_refs, correct_lines, correct_line_refs, line_mistakes)
+        (final_fixed_lines, final_correct_lines) = filter.filter_offset_lines(correct_lines, line_mistakes)
 
         line_mistake_points = filter.find_fixed_line_points(line_mistakes, fixed_lines_box)
-        duplicate_line_refs, line_duplicate_points = filter.remove_duplicate_lines(all_lines, line_refs)
 
-        filtered_blockref, filtered_walls, filtered_insert_refs  = maths.Shape_outline(Blockref_Points, all_walls, insert_refs)
+        line_duplicate_points = filter.remove_duplicate_lines(all_lines)
 
         (post_accepted_blocks, post_accepted_lines,
         post_rejected_block, post_rejected_lines,
-        blockname_unmatched, linename_unmatched, object_rej_line_refs) = before_after(fixed_all_blocks, filtered_blockref, all_lines, correct_lines, fixed_lines, wall_slopes, wall_intercepts, all_walls, correct_line_refs + line_mistake_refs)
+        blockname_unmatched, linename_unmatched) = before_after(fixed_all_blocks, filtered_blockref, all_lines, correct_lines, fixed_lines, wall_slopes, wall_intercepts, all_walls)
 
-        line_block_connections, final_block_line_refs = filter.link_line_block_connections(correct_lines, fixed_lines, fixed_all_blocks, correct_line_refs, line_mistake_refs)
+        line_block_connections = filter.link_line_block_connections(correct_lines, fixed_lines, fixed_all_blocks)
 
-        final_line_line_connections, final_line_line_refs = filter.find_line_line_connections(fixed_lines, line_mistake_refs, wall_slopes, wall_intercepts, all_walls, line_line_connections_check, line_line_connections, correct_not_OCO_refs)
+        final_line_line_connections = filter.find_line_line_connections(fixed_lines, wall_slopes, wall_intercepts, all_walls, line_line_connections_check, line_line_connections)
 
-        line_name, all_fail, category_error_refs = validate_categories(final_line_line_connections, line_block_connections, final_line_line_refs, final_block_line_refs)
+        line_name, all_fail = validate_categories(final_line_line_connections, line_block_connections)
         finals_corrected_blocks = maths.return_error(final_corrected_blocks, mistake_points)
 
         #mistake explainer 
@@ -228,19 +227,16 @@ def autocad_points(filepath):
     
         mistake_line_reason = dxf_mistake_line_explained(line_mistake_exp)
 
-        # print(f'These are all the lines {len(all_lines)}')
-        # print(f'These are all the line refs {len(line_refs)}')
 
+        
         return (doc, on_line_points, all_lines_table, 
             wall_slope_intercept, filtered_walls, mistake_points, 
-            finals_corrected_blocks, line_mistakes, final_fixed_lines, final_corrected_block_refs, 
-            line_mistake_points, final_fixed_lines_refs, duplicate_line_refs, line_duplicate_points,
-            post_accepted_blocks, post_accepted_lines, 
+            finals_corrected_blocks, line_mistakes, final_fixed_lines, 
+            line_duplicate_points, post_accepted_blocks, post_accepted_lines, 
             post_rejected_block, post_rejected_lines, line_name, all_fail, 
-            blocks_fil, bedit_check, fixed_lines, line_mistake_refs, 
-            all_walls, wall_point_refs, bedit_mistake_points, bedit_corrected_blocks,
-            mistake_block_reason, mistake_line_reason, blockname_unmatched, linename_unmatched, category_error_refs, object_rej_line_refs)
-
+            blocks_fil, bedit_check, fixed_lines, all_walls, wall_point_refs, bedit_mistake_points, bedit_corrected_blocks,
+            mistake_block_reason, mistake_line_reason, blockname_unmatched, linename_unmatched)
+    
 def extract_polyline_points(polyline): #Convert wall points into x and y points 
         if polyline.dxftype() == 'LWPOLYLINE':
             wall_points = []
@@ -257,11 +253,10 @@ def update_dxf_in_place(filepath, output_filepath):
 
     (doc, on_line_points, all_lines_table, 
         wall_slope_intercept, filtered_walls, mistake_points, 
-        corrected_blocks, line_mistakes, bedit_lines, corrected_block_refs, 
-        line_mistake_points, line_bedit_refs, duplicate_line_refs, duplicate_line_points,
-        _, _, post_rejected_block, post_rejected_line, _, all_fail, blocks_fil, bedit_check, fixed_lines, line_mistake_refs, all_walls, wall_point_refs, _, _,
-        mistake_block_reason, mistake_line_reasons, blockname_unmatched, linename_unmathced, 
-        category_error_refs, object_rej_line_refs) = autocad_points(filepath)
+        corrected_blocks, line_mistakes, bedit_lines,  
+        duplicate_line_points, _, _, post_rejected_block, 
+        post_rejected_line, _, all_fail, blocks_fil, bedit_check, fixed_lines,all_walls, wall_point_refs, _, _,
+        mistake_block_reason, mistake_line_reasons, blockname_unmatched, linename_unmathced) = autocad_points(filepath)
     
     msp = doc.modelspace()
 
@@ -289,18 +284,17 @@ def update_dxf_in_place(filepath, output_filepath):
                 'layer': original_ref.dxf.layer,
             })
 
+        bedit_block_map = {}
         for idx, block_data in enumerate(corrected_blocks):
-            name = block_data[0]
-            new_x, new_y = block_data[1], block_data[2]
-            original_ref = corrected_block_refs[idx]
+            name, new_x, new_y, angle, name_error, block_ref = block_data
             if new_x is not None and new_y is not None:
                 new_insert = msp.add_blockref(name, (new_x, new_y), dxfattribs={
-                    'rotation': original_ref.dxf.rotation,
-                    'layer': original_ref.dxf.layer,
-                    'xscale': original_ref.dxf.get('xscale', 1),
-                    'yscale': original_ref.dxf.get('yscale', 1),
+                    'rotation': block_ref.dxf.rotation,
+                    'layer': block_ref.dxf.layer,
+                    'xscale': block_ref.dxf.get('xscale', 1),
+                    'yscale': block_ref.dxf.get('yscale', 1),
                 })
-                for attrib in original_ref.attribs:
+                for attrib in block_ref.attribs:
                     attrib_world_x = container_x + attrib.dxf.insert.x
                     attrib_world_y = container_y + attrib.dxf.insert.y
                     new_insert.add_attrib(
@@ -313,47 +307,44 @@ def update_dxf_in_place(filepath, output_filepath):
                             'rotation': attrib.dxf.get('rotation', 0),
                         }
                     )
+                bedit_block_map[block_ref] = new_insert
 
-        # For lines
+        bedit_line_map = {}
         for idx, line_data in enumerate(bedit_lines):
-            new_x_start, new_y_start = line_data[1], line_data[2]
-            new_x_end, new_y_end = line_data[3], line_data[4]
-            original_ref = line_bedit_refs[idx]
-            copied = original_ref.copy()
+            name, x_start, y_start, x_end, y_end, offset, line_ref = line_data
+            copied = line_ref.copy()
             msp.add_entity(copied)
-            copied.dxf.start = (new_x_start, new_y_start)
-            copied.dxf.end = (new_x_end, new_y_end)
+            copied.dxf.start = (x_start, y_start)
+            copied.dxf.end = (x_end, y_end)
+            bedit_line_map[line_ref] = copied
 
-        for entity in duplicate_line_refs:
-            msp.delete_entity(entity)        
-
-        #Mistake explanation     
-
-        explain_mistakes_dxf(msp, duplicate_line_points, duplicate_line_refs, mistake_block_reason, mistake_line_reasons, post_rejected_block, post_rejected_line, all_fail, doc, category_error_refs, object_rej_line_refs, line_mistake_refs)
+        explain_mistakes_dxf(msp, duplicate_line_points, mistake_block_reason, mistake_line_reasons, post_rejected_block, post_rejected_line, all_fail, doc, bedit_line_map, bedit_block_map)
 
         # Delete the container INSERT
         for insert in msp.query('INSERT'):
             if insert.dxf.name == blocks_fil[0][0]:
                 msp.delete_entity(insert)
                 break
-    
+
     else:
-        explain_mistakes_dxf(msp, duplicate_line_points, duplicate_line_refs, mistake_block_reason, mistake_line_reasons, post_rejected_block, post_rejected_line, 
-                             all_fail, doc, category_error_refs, object_rej_line_refs, line_mistake_refs)
+        explain_mistakes_dxf(msp, duplicate_line_points, mistake_block_reason, mistake_line_reasons, post_rejected_block, post_rejected_line,
+                             all_fail, doc, {}, {})
 
     doc.saveas(output_filepath)
 
-def explain_mistakes_dxf(msp, duplicate_line_points, duplicate_line_refs, mistake_block_reason, mistake_line_reasons, post_rejected_block, post_rejected_line, all_fail, doc, category_error_refs, object_rej_line_refs, line_mistake_refs): 
-    for i, line in enumerate(duplicate_line_points):  # flagging a duplicate line 
-            name, x_s, y_s, x_e, y_e, reason = line 
-            triangle1 = draw_triangle(msp, x_s, y_s)
-            triangle2 = draw_triangle(msp, x_e, y_e)
-            triangle1.set_xdata('PE_URL', [(1000, ""),(1002, "{"),(1000, reason),(1000, ""),(1002, "}"),])
-            triangle2.set_xdata('PE_URL', [(1000, ""),(1002, "{"),(1000, reason),(1000, ""),(1002, "}"),])
-            link_shape_line(duplicate_line_refs, triangle1, triangle2, name, 'Duplicate', i, doc)
+def explain_mistakes_dxf(msp, duplicate_line_points, mistake_block_reason, mistake_line_reasons, post_rejected_block, post_rejected_line, all_fail, doc, bedit_line_map, bedit_block_map):
 
-    for block in mistake_block_reason:
-        name_b, x_b, y_b, reason = block
+    sep_duplicate_lines = create_separation(duplicate_line_points, 'Duplicate')
+    for i, line in enumerate(sep_duplicate_lines):  # flagging a duplicate line
+        name, x_s, y_s, x_e, y_e, line_ref, reason = line
+        triangle1 = draw_triangle(msp, x_s, y_s)
+        triangle2 = draw_triangle(msp, x_e, y_e)
+        resolved_line_ref = bedit_line_map.get(line_ref, line_ref)
+        link_shape_line(resolved_line_ref, triangle1, triangle2, name, 'Duplicate', i, doc)
+        draw_group_hyperlink(resolved_line_ref, reason, triangle1, triangle2, i)
+
+    for i, block in enumerate(mistake_block_reason):
+        name_b, x_b, y_b, reason, block_ref = block
         circle = msp.add_circle(center=(x_b, y_b), radius=75, dxfattribs={"color": 1})
         circle.set_xdata('PE_URL', [
             (1000, ""),
@@ -362,51 +353,62 @@ def explain_mistakes_dxf(msp, duplicate_line_points, duplicate_line_refs, mistak
             (1000, ""),
             (1002, "}"),
         ])
-
+        resolved_block_ref = bedit_block_map.get(block_ref, block_ref)
+        link_shape_line(resolved_block_ref, circle, None, name_b, 'Block', i, doc)
+        draw_group_hyperlink(resolved_block_ref, reason, circle, None, i)
+        
     for i, mistake_line in enumerate(mistake_line_reasons):
-        name_l, x_l, y_l, reason = mistake_line
+        name_l, x_l, y_l, line_ref, reason = mistake_line
         circle = msp.add_circle(center=(x_l, y_l), radius=75, dxfattribs={"color": 1})
+        resolved_line_ref = bedit_line_map.get(line_ref, line_ref)
+        link_shape_line(resolved_line_ref, circle, None, name_l, 'Geometry', i, doc)
+        draw_group_hyperlink(resolved_line_ref, reason, circle, None, i)
 
-        link_shape_line(line_mistake_refs, circle, None, name_l, 'Geometry', i, doc)
-        draw_group_hyperlink(line_mistake_refs, reason, circle, None, i)
-
-    for block in post_rejected_block:  #explaing why a rejected block from object database was rejected
-        name, x, y, reason = block 
+    for i, block in enumerate(post_rejected_block):  #explaing why a rejected block from object database was rejected
+        name, x, y, reason, block_ref = block 
         triangle = draw_triangle(msp, x, y)
         triangle.set_xdata('PE_URL', [(1000, ""),(1002, "{"),(1000, reason),(1000, ""),(1002, "}"),])
+        resolved_block_ref = bedit_block_map.get(block_ref, block_ref)
+        link_shape_line(resolved_block_ref, triangle, None, name, 'Object_DB_Block', i, doc)
+        draw_group_hyperlink(resolved_block_ref, reason, triangle, None, i)
 
-    seperation_lines = create_separation(all_fail) #ensuring there is no overlap between triangles 0
+    seperation_lines = create_separation(all_fail, 'Category_db') #ensuring there is no overlap between triangles 0
     for i, seperation_line in enumerate(seperation_lines):
-        line_name, x_start, y_start, line_start_category, x_end, y_end, line_end_category, reason = seperation_line
+        line_name, x_start, y_start, line_start_category, x_end, y_end, line_end_category, reason, line_ref = seperation_line
         triangle1 = draw_triangle(msp, x_start, y_start)
         triangle2 = draw_triangle(msp, x_end, y_end)
+        resolved_line_ref = bedit_line_map.get(line_ref, line_ref)
+        link_shape_line(resolved_line_ref, triangle1, triangle2, line_name, 'Category', i, doc)  
+        draw_group_hyperlink(resolved_line_ref, reason, triangle1, triangle2, i)
 
-        link_shape_line(category_error_refs, triangle1, triangle2, line_name, 'Category', i, doc)  
-        draw_group_hyperlink(category_error_refs, reason, triangle1, triangle2, i)
-
-    for i, line in enumerate(post_rejected_line):   #why a rejected line from object database was rejected
-        name, x_s, y_s, x_e, y_e, reason = line     
+    sep_object_lines = create_separation(post_rejected_line, 'Object_db')
+    for i, line in enumerate(sep_object_lines):   #why a rejected line from object database was rejected
+        name, x_s, y_s, x_e, y_e, reason, line_ref = line     
         triangle1 = draw_triangle(msp, x_s, y_s)
         triangle2 = draw_triangle(msp, x_e, y_e)
-
-        link_shape_line(object_rej_line_refs, triangle1, triangle2, name, 'Object', i, doc)
-        draw_group_hyperlink(object_rej_line_refs, reason, triangle1, triangle2, i)
+        resolved_line_ref = bedit_line_map.get(line_ref, line_ref)
+        link_shape_line(resolved_line_ref, triangle1, triangle2, name, 'Object', i, doc)
+        draw_group_hyperlink(resolved_line_ref, reason, triangle1, triangle2, i)
 
  
-def link_shape_line(refs, shape1, shape2, name, error_type, i, doc): 
-    if i < len(refs) and refs[i] is not None:
-        group_name = f'{error_type}_ERROR_{name}_{i}'
-        if doc.groups.get(group_name) is not None:
-                doc.groups.delete(group_name)
-        group = doc.groups.new(group_name)
-        if shape2 is None: 
-            members = [e for e in [shape1, refs[i]] if e is not None]
-        else:
-            members = [e for e in [shape1, shape2, refs[i]] if e is not None] 
-        group.extend(members)  
+def link_shape_line(ref, shape1, shape2, name, error_type, i, doc): 
+    group_name = f'{error_type}_ERROR_{name}_{i}'
+    if doc.groups.get(group_name) is not None:
+            doc.groups.delete(group_name)
+    group = doc.groups.new(group_name)
+    if shape2 is None: 
+        members = [e for e in [shape1, ref] if e is not None]
+    else:
+        members = [e for e in [shape1, shape2, ref] if e is not None] 
+    try:
+        group.extend(members)
+    except const.DXFStructureError:
+        shapes_only = [e for e in [shape1, shape2] if e is not None]
+        if shapes_only:
+            group.extend(shapes_only)
               
 
-def draw_group_hyperlink(refs, reason, shape1, shape2, i): 
+def draw_group_hyperlink(ref, reason, shape1, shape2, i): 
     """Function for attaching a hyperlink to an error 
     the function attaches the hyperlink to the line and the shapes that flag the error"""
     xdata = [(1000, ""),(1002, "{"),(1000, reason),(1000, ""),(1002, "}"),]
@@ -415,49 +417,53 @@ def draw_group_hyperlink(refs, reason, shape1, shape2, i):
     if shape2 is not None:
         shape2.set_xdata('PE_URL', xdata)
 
-    if i < len(refs) and refs[i] is not None:
-            refs[i].set_xdata('PE_URL', [(1000, ""),(1002, "{"),(1000, reason),(1000, ""),(1002, "}"),])
+    ref.set_xdata('PE_URL', [(1000, ""),(1002, "{"),(1000, reason),(1000, ""),(1002, "}"),])
 
             
-def create_separation(lines): 
+def create_separation(lines, type):
+    if type in ('Duplicate', 'Object_db'):
+        x_end_idx = 3
+    else:  # Category_db
+        x_end_idx = 4
+
     for i, j in combinations(range(len(lines)), 2):
         line1 = list(lines[i])
         line2 = list(lines[j])
 
-        line_name1, x_start1, y_start1, line_start_category1, x_end1, y_end1, line_end_category1, reason1 = line1
-        line_name2, x_start2, y_start2, line_start_category2, x_end2, y_end2, line_end_category2, reason2 = line2
+        if type == 'Duplicate' or type == 'Object_db':
+            line_name1, x_start1, y_start1, x_end1, y_end1, line_ref1, reason1 = line1
+            line_name2, x_start2, y_start2, x_end2, y_end2, line_ref2, reason2 = line2
+
+        if type == 'Category_db':
+            line_name1, x_start1, y_start1, line_start_category1, x_end1, y_end1, line_end_category1, reason1, line_ref1 = line1
+            line_name2, x_start2, y_start2, line_start_category2, x_end2, y_end2, line_end_category2, reason2, line_ref2 = line2
 
         if x_start1 is not None and x_start2 is not None and y_start1 is not None and y_start2 is not None:
             if abs(x_start1 - x_start2) < 1 and abs(y_start1 - y_start2) < 1:
-                line1[1] -= 10
-                line2[1] += 10
+                line1[1] += 10
+                line2[1] -= 10
 
         if x_end1 is not None and x_end2 is not None and y_end1 is not None and y_end2 is not None:
             if abs(x_end1 - x_end2) < 1 and abs(y_end1 - y_end2) < 1:
-                line1[4] -= 10
-                line2[4] += 10
+                line1[x_end_idx] += 10
+                line2[x_end_idx] -= 10
 
-        if x_start1 is not None and x_end2 is not None and y_start1 is not None and y_end2 is not None: 
-            if abs(x_start1 - x_end2) < 1 and abs(y_start1 - y_end2) < 1: 
-                line1[1] -= 10
-                line2[4] += 10        
+        if x_start1 is not None and x_end2 is not None and y_start1 is not None and y_end2 is not None:
+            if abs(x_start1 - x_end2) < 1 and abs(y_start1 - y_end2) < 1:
+                line1[1] += 10
+                line2[x_end_idx] -= 10
 
-        if x_start2 is not None and x_end1 is not None and y_start2 is not None and y_end1 is not None: 
+        if x_start2 is not None and x_end1 is not None and y_start2 is not None and y_end1 is not None:
             if abs(x_start2 - x_end1) < 1 and abs(y_start2 - y_end1) < 1:
-                line2[1]
-                line1[4]        
+                line2[1] += 10
+                line1[x_end_idx] -= 10
 
         lines[i] = tuple(line1)
         lines[j] = tuple(line2)
 
     return lines                     
 
-                
-
-
-
-
-
+            
 def draw_red_box(msp, x, y, size):
     """Draws a red rectangle around corrected block references"""
     corners = [

@@ -100,7 +100,8 @@ objects_data = [
     {'name': 'DIAGONAL BRACE',     'type': 'LINE',   'category': 'BRACE LINE',  'on_channel_outline': 'Yes'},
     {'name': 'Door',               'type': 'LWPOLYLINE', 'category': None, 'on_channel_outline': 'No'},
     {'name': 'CHANNEL OUTLINE',    'type': 'LWPOLYLINE', 'category': 'CHANNEL OUTLINE', 'on_channel_outline': 'Yes'},
-    {'name': 'FLOOR BEAM',    'type': 'LINE', 'category': 'FLOOR', 'on_channel_outline': 'No'}
+    {'name': 'FLOOR BEAM',    'type': 'LINE', 'category': 'FLOOR', 'on_channel_outline': 'No'},
+    {'name': 'COMPOUND',    'type': 'LINE', 'category': 'COMPOUND LINE', 'on_channel_outline': 'Yes'}
     ]
 
 
@@ -128,7 +129,7 @@ def seed_database():
 
 
 category_line_data = [
-    {'category': 'TRUSS LINE' , 'allowed_connections' : ('TRUSS LINE' , 'HEADER', 'WALL LINE', 'CILL LINE', 'BRACE LINE', 'SHS TRUSS LINE', 'CHANNEL OUTLINE'), 'double_connection': 'No', 'on_channel': 'No'}, 
+    {'category': 'TRUSS LINE' , 'allowed_connections' : ('TRUSS LINE' , 'HEADER', 'WALL LINE', 'CILL LINE', 'BRACE LINE', 'SHS TRUSS LINE', 'CHANNEL OUTLINE', 'STUD', 'OTHER'), 'double_connection': 'No', 'on_channel': 'No'}, 
     {'category': 'TRUSS BRACING', 'allowed_connections': ('TRUSS LINE' , 'HEADER', 'WALL LINE', 'CILL LINE', 'BRACE LINE', 'SHS TRUSS LINE', 'CHANNEL OUTLINE'), 'double_connection': 'Yes', 'on_channel': 'No'},
     {'category': 'SHS TRUSS LINE', 'allowed_connections': ('TRUSS LINE' , 'HEADER', 'WALL LINE', 'CILL LINE', 'BRACE LINE', 'SHS TRUSS LINE', 'CHANNEL OUTLINE'), 'double_connection': 'No', 'on_channel': 'No'},
     {'category': 'HEADER', 'allowed_connections': ('CP', 'STUD'), 'double_connection': 'Yes', 'on_channel': 'Yes'},
@@ -137,6 +138,7 @@ category_line_data = [
     {'category': 'BRACE LINE', 'allowed_connections': ('CP', 'STUD'), 'double_connection': 'Yes', 'on_channel': 'Yes'},  
     {'category': 'FLOOR', 'allowed_connections': ('CP', 'STUD', 'HEADER', 'BRACE LINE', 'CILL LINE', 'WALL LINE', 'CHANNEL OUTLINE'), 'double_connection': 'Yes', 'on_channel': 'No'}, 
     {'category': 'CHANNEL OUTLINE', 'allowed_connections': ('TRUSS LINE' , 'TRUSS BRACING', 'HEADER', 'WALL LINE', 'CILL LINE', 'BRACE LINE', 'SHS TRUSS LINE', 'FLOOR'), 'double_connection': 'Yes', 'on_channel': 'Yes'}, 
+    {'category': 'COMPOUND LINE', 'allowed_connections': ('CP'), 'double_connection': 'Yes', 'on_channel': 'Yes'}
 ]
 
 

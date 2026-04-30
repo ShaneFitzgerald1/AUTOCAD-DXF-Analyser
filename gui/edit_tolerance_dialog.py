@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QListWidget, QPushButton, QTabWidget, QWidget, QScrollArea, QLineEdit, QCheckBox
+from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QListWidget, QPushButton, QTabWidget, QWidget, QScrollArea, QLineEdit, QCheckBox, QSizePolicy
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
 from gui.BaseDialog import BaseDialog
@@ -7,7 +7,13 @@ from database.db_objects import get_catalogue, get_category_catalogue
 from gui.table_widget import LabeledTableWidget
 from gui.base_table import BaseTable
 from gui.add_object_dialog import Combox
-from database.tolerance_config import save_tolerance_set, get_active_set_name, get_all_tolerance_sets, get_all_tolerance_sets_full, delete_tolerance_set, _read_tolerances, _write_tolerances, set_active_tolerance_set
+from gui.edit_database_dialog import EditDialog
+from database.tolerance_config import (
+    save_tolerance_set, get_active_set_name, get_all_tolerance_sets, get_all_tolerance_sets_full,
+    delete_tolerance_set, _read_tolerances, _write_tolerances, set_active_tolerance_set,
+    save_boundary_set, get_active_boundary_set_name, get_all_boundary_sets, get_all_boundary_sets_full,
+    delete_boundary_set, set_active_boundary_set, DEFAULT_BOUNDARIES
+)
 
 
 class edit_tolerences(BaseDialog):
@@ -36,8 +42,7 @@ class edit_tolerences(BaseDialog):
 
         self.create_label(f'{self.warning} If you have created a new tolerance set, select it here before running analysis.\n\n'
                                'See Tolerance Settings to view saved tolerance sets and tolerance descriptions. All tolerances are in mm', 5, False,
-                               10, set_layout, False
-                               )
+                               10, set_layout, False)
 
         btn_settings = QPushButton('Tolerance Settings')
         btn_settings.clicked.connect(lambda: tolerence_settings(parent=self).exec_())
@@ -173,6 +178,9 @@ class edit_tolerences(BaseDialog):
         """Function for creating a Label"""
         label = QLabel(text)
         label.setWordWrap(True)
+        policy = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        policy.setHeightForWidth(True)
+        label.setSizePolicy(policy)
         if bold:
             label.setFont(QFont('Inter', fontsize, QFont.Bold))
         else:
@@ -235,8 +243,17 @@ class edit_tolerences(BaseDialog):
             self.feedback_label_add.setStyleSheet('color: red;')
             self.feedback_label_add.setText('Please fill in all boxes.')
             return
-        
-        save_tolerance_set(name, block_tolerance_input, line_tolerance1_input, line_tolerance2_input)   
+
+        try:
+            block_tolerance_input = float(block_tolerance_input)
+            line_tolerance1_input = float(line_tolerance1_input)
+            line_tolerance2_input = float(line_tolerance2_input)
+        except ValueError:
+            self.feedback_label_add.setStyleSheet('color: red;')
+            self.feedback_label_add.setText('Tolerance values must be numbers.')
+            return
+
+        save_tolerance_set(name, block_tolerance_input, line_tolerance1_input, line_tolerance2_input)
         self.feedback_label_add.setStyleSheet('color: green;')
         self.feedback_label_add.setText(f'Saved {name} as a Tolerance set.')
         self.remake_type_combox()
@@ -245,25 +262,40 @@ class edit_tolerences(BaseDialog):
 
     def make_changes(self):
         name = self.edit_combo.currentText()
+
+        if not EditDialog._confirm('Confirm Change', f'Are you sure you want to change the {name} tolerance set?', self):
+            return
+
         data = _read_tolerances()
 
-        if not self.edit_block_cb.isChecked() and not self.edit_line1_cb.isChecked() and not self.edit_line2_cb.isChecked(): 
+        if not self.edit_block_cb.isChecked() and not self.edit_line1_cb.isChecked() and not self.edit_line2_cb.isChecked():
             self.feedback_label_edit.setStyleSheet('color: red;')
-            self.feedback_label_edit.setText(f'Select a tolerance to edit')
-            return 
+            self.feedback_label_edit.setText('Select a tolerance to edit')
+            return
 
-        if self.edit_block_cb.isChecked():
-            data['sets'][name]['block_tolerance'] = float(self.edit_block_tolerance.text())
-        if self.edit_line1_cb.isChecked():
-            data['sets'][name]['line_tolerance_1'] = float(self.edit_line_tolerance1.text())
-        if self.edit_line2_cb.isChecked():
-            data['sets'][name]['line_tolerance_2'] = float(self.edit_line_tolerance2.text())
+        try:
+            if self.edit_block_cb.isChecked():
+                data['sets'][name]['block_tolerance'] = float(self.edit_block_tolerance.text())
+            if self.edit_line1_cb.isChecked():
+                data['sets'][name]['line_tolerance_1'] = float(self.edit_line_tolerance1.text())
+            if self.edit_line2_cb.isChecked():
+                data['sets'][name]['line_tolerance_2'] = float(self.edit_line_tolerance2.text())
+        except ValueError:
+            self.feedback_label_edit.setStyleSheet('color: red;')
+            self.feedback_label_edit.setText('Tolerance values must be numbers.')
+            return
+
         _write_tolerances(data)
         self.feedback_label_edit.setStyleSheet('color: green;')
         self.feedback_label_edit.setText(f'Updated {name} Tolerance set')
 
+
     def delete_tolerance(self): 
         name = self.edit_combo.currentText()
+
+        if not EditDialog._confirm('Confirm Delete', f'Are you sure you want to delete the {name} tolerance set?', self):
+            return
+        
         result = delete_tolerance_set(name) 
 
         if result:

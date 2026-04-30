@@ -15,6 +15,7 @@ from backend.convertdwg import convertDWG_DXF, convertDXF_DWG
 from gui.set_output_file_type import SetOutputFileType
 from backend.output_filepaths import dwg_output
 from gui.edit_tolerance_dialog import edit_tolerences
+from gui.edit_boundary_dialog import edit_boundary
 
 class MyWindow(QMainWindow):
     def __init__(self):
@@ -28,7 +29,6 @@ class MyWindow(QMainWindow):
         self.extract_oda_directory()
         self.initUI()
 
-    
     def initUI(self):
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)
@@ -69,8 +69,8 @@ class MyWindow(QMainWindow):
         purple_vbox.setAlignment(Qt.AlignTop)
         purple_vbox.setSpacing(7)
         purple_vbox.setContentsMargins(0, 0, 20, 0)
-        self.Button4 = self.create_buttons('Edit Object Database',        lambda: EditDialog(mode='object',   parent=self).exec_(), purple_vbox, purple_style)
-        self.Button5 = self.create_buttons('Edit Line Category Database', lambda: EditDialog(mode='category', parent=self).exec_(), purple_vbox, purple_style)
+        self.Button4 = self.create_buttons('Edit Object Database',        lambda: self._open_edit_dialog('object'),   purple_vbox, purple_style)
+        self.Button5 = self.create_buttons('Edit Line Category Database', lambda: self._open_edit_dialog('category'), purple_vbox, purple_style)
         self.Button6 = self.create_buttons('Set Database Directory', self._open_directory_dialog, purple_vbox, purple_style)
         self.Button7 = self.create_buttons('Database Description', lambda: database_description(parent=self).exec_(), purple_vbox, purple_style)
         purple_hbox.addLayout(purple_vbox)
@@ -163,6 +163,10 @@ class MyWindow(QMainWindow):
         tolerance_action = QAction('Adjust Tolerances', self)
         tolerance_action.triggered.connect(self._open_tolerance_dialog)
         menubar.addAction(tolerance_action)
+
+        set_boundary_action = QAction('Set Boundary', self)
+        set_boundary_action.triggered.connect(self._open_boundary_dialog)
+        menubar.addAction(set_boundary_action)
 
 
     def create_buttons(self, Text, command, box: QHBoxLayout, Colour): 
@@ -450,17 +454,17 @@ class MyWindow(QMainWindow):
         else: # if the file is normal 
             if len(self.mistake_points) > 0: 
                 QLabel1 = QLabel(f'There were {len(self.on_line_points) - len(self.mistake_points)} Block(s) Accepted {self.check} and {len(self.mistake_points)} Block(s) Rejected {self.cross} by the Geometry Engine')
-                QLabel1.setAlignment(Qt.AlignCenter)
-                QLabel1.setFont(QFont('Inter', 10))
+            
 
-                vboxgeo1.addWidget(QLabel1)
-                # vboxgeo1.addWidget(QLabel2)
-
-            if len(self.mistake_points) < 1: 
+            if len(self.mistake_points) < 1 and len(self.on_line_points) > 0: 
                 QLabel1 = QLabel(f'All {len(self.on_line_points)} Blocks were accepted by the Geometry Engine {self.check}')
-                QLabel1.setAlignment(Qt.AlignCenter)
-                QLabel1.setFont(QFont('Inter', 10))
-                vboxgeo1.addWidget(QLabel1)
+
+            if len(self.mistake_points) < 1 and len(self.on_line_points) < 1: 
+                QLabel1 = QLabel(f'No Blocks in the drawing are within the set Boundary. {self.warning}')
+
+            QLabel1.setAlignment(Qt.AlignCenter)
+            QLabel1.setFont(QFont('Inter', 10))
+            vboxgeo1.addWidget(QLabel1)
 
             ####
 
@@ -481,11 +485,14 @@ class MyWindow(QMainWindow):
             QLabeldup.setFont(QFont('Inter', 10))
             vboxgeo2.addWidget(QLabeldup)    
 
-        if len(self.line_mistakes) < 1: 
-            QLabel3 = QLabel(f'All {len(self.all_lines_table)} Lines were accepted by the Geometry Engine {self.check}')   
-            QLabel3.setAlignment(Qt.AlignCenter)
-            QLabel3.setFont(QFont('Inter', 10))
-            vboxgeo2.addWidget(QLabel3)
+        if len(self.line_mistakes) < 1 and len(self.all_lines_table) > 0: 
+            QLabel3 = QLabel(f'All {len(self.all_lines_table)} Lines were accepted by the Geometry Engine {self.check}')  
+
+        if len(self.all_lines_table) < 1 and len(self.line_mistakes) < 1: 
+            QLabel3 = QLabel(f'No Lines in the drawing are within the set Boundary. {self.warning}')  
+        QLabel3.setAlignment(Qt.AlignCenter)
+        QLabel3.setFont(QFont('Inter', 10))
+        vboxgeo2.addWidget(QLabel3)
 
         vbox1.addWidget(QMLabel)
         vbox1.addWidget(QtitLabel)
@@ -508,59 +515,72 @@ class MyWindow(QMainWindow):
         QtitLabel2.setFont(QFont('Inter', 12, QFont.Bold))
         vbox2.addWidget(QtitLabel2)
 
-        QtitLabel3 = QLabel('Object DataBase')
-        QtitLabel3.setAlignment(Qt.AlignCenter)
-        QtitLabel3.setFont(QFont('Inter', 11, QFont.Bold))
-        vboxdata1.addWidget(QtitLabel3)
+        if (len(self.post_accepted_blocks) < 1 and len(self.post_rejected_blocks) < 1 and len(self.post_accepted_lines) < 1 and 
+            len(self.post_rejected_lines) < 1 and len(self.line_name) < 1 and len(self.all_fail) < 1):
+            Qidklabel = QLabel(f'{self.cross} There are no blocks or lines present to be analysed by the Database')
+            Qidklabel.setAlignment(Qt.AlignCenter)
+            Qidklabel.setFont(QFont('Inter', 10))
+            vbox2.addWidget(Qidklabel)
 
-        if (len(self.post_rejected_blocks)) > 0: 
-            QLabel5 = QLabel(f'There were {len(self.post_accepted_blocks)} Block(s) Accepted {self.check} and {len(self.post_rejected_blocks)} Block(s) Rejected {self.cross} by the Object Database')
-        else:     
-            QLabel5 = QLabel(f'All {len(self.post_accepted_blocks)} Blocks were accepted by the Object Database {self.check}')  
+        else:    
 
-        QLabel5.setAlignment(Qt.AlignCenter)
-        QLabel5.setFont(QFont('Inter', 10))
-        vboxdata1.addWidget(QLabel5)
+            if len(self.post_accepted_blocks) > 0 or len(self.post_rejected_blocks) > 0 or len(self.post_accepted_lines) > 0 or len(self.post_rejected_lines) > 0:
+                QtitLabel3 = QLabel('Object DataBase')
+                QtitLabel3.setAlignment(Qt.AlignCenter)
+                QtitLabel3.setFont(QFont('Inter', 11, QFont.Bold))
+                vboxdata1.addWidget(QtitLabel3)
 
+                if len(self.post_accepted_blocks) > 0 or len(self.post_rejected_blocks):  
 
-        if len(self.post_rejected_lines) > 0: 
-            QLabel6 = QLabel(f'There were {len(self.post_accepted_lines)} Line(s) Accepted {self.check} and {len(self.post_rejected_lines)} Line(s) Rejected {self.cross} by the Object Database ')  
-            vboxdata1.addWidget(QLabel6)
+                    if (len(self.post_rejected_blocks)) > 0: 
+                        QLabel5 = QLabel(f'There were {len(self.post_accepted_blocks)} Block(s) Accepted {self.check} and {len(self.post_rejected_blocks)} Block(s) Rejected {self.cross} by the Object Database')
+                    else:     
+                        QLabel5 = QLabel(f'All {len(self.post_accepted_blocks)} Blocks were accepted by the Object Database {self.check}')  
+            
+                    QLabel5.setAlignment(Qt.AlignCenter)
+                    QLabel5.setFont(QFont('Inter', 10))
+                    vboxdata1.addWidget(QLabel5)
 
-        else: 
-            QLabel6 = QLabel(f'All {len(self.post_accepted_lines)} Lines were accepted by the Object Database {self.check} ')    
+                if len(self.post_accepted_lines) > 0 or len(self.post_rejected_lines) > 0:
+                    if len(self.post_rejected_lines) > 0: 
+                        QLabel6 = QLabel(f'There were {len(self.post_accepted_lines)} Line(s) Accepted {self.check} and {len(self.post_rejected_lines)} Line(s) Rejected {self.cross} by the Object Database ')  
+                        vboxdata1.addWidget(QLabel6)
 
-        QLabel6.setAlignment(Qt.AlignCenter)
-        QLabel6.setFont(QFont('Inter', 10))
-        vboxdata1.addWidget(QLabel6)
+                    else: 
+                        QLabel6 = QLabel(f'All {len(self.post_accepted_lines)} Lines were accepted by the Object Database {self.check} ')    
 
-        hboxdata.addLayout(vboxdata1)    
-        vbox2.addLayout(hboxdata)
+                    QLabel6.setAlignment(Qt.AlignCenter)
+                    QLabel6.setFont(QFont('Inter', 10))
+                    vboxdata1.addWidget(QLabel6)
 
-        #Category database 
+                hboxdata.addLayout(vboxdata1)    
+                vbox2.addLayout(hboxdata)
 
-        QtitLabel4 = QLabel(f'Category Database')
-        QtitLabel4.setAlignment(Qt.AlignCenter)
-        QtitLabel4.setFont(QFont('Inter', 11, QFont.Bold))
-        vboxdata2.addWidget(QtitLabel4)
+            #Category database 
 
-        if len(self.all_fail) > 0: 
-            QLabel7 = QLabel(f'There were {len(self.line_name)} Accepted Line(s) {self.check} and {len(self.all_fail)} Rejected Line(s) {self.cross} from the Category Database ')
-        else: 
-            QLabel7 = QLabel(f'All {len(self.line_name)} were accepted by the Category Database {self.check}')
+            if len(self.line_name) > 0 or len(self.all_fail) > 0:
+                QtitLabel4 = QLabel(f'Category Database')
+                QtitLabel4.setAlignment(Qt.AlignCenter)
+                QtitLabel4.setFont(QFont('Inter', 11, QFont.Bold))
+                vboxdata2.addWidget(QtitLabel4)
 
-        QLabel7.setAlignment(Qt.AlignCenter)
-        QLabel7.setFont(QFont('Inter', 10))
-        vboxdata2.addWidget(QLabel7)
-    
-        if len(self.all_fail) > 0 or len(self.post_rejected_lines) > 0 or len(self.post_rejected_blocks) > 0: 
-            dataerror2 = QLabel(f'{self.warning}See Database Results Tab for more details {self.warning}')
-            dataerror2.setAlignment(Qt.AlignCenter)
-            dataerror2.setFont(QFont('Inter', 10))
-            vbox2.addWidget(dataerror2)
-       
-        hboxdata.addLayout(vboxdata2)
-        vbox2.addLayout(hboxdata)   
+                if len(self.all_fail) > 0: 
+                    QLabel7 = QLabel(f'There were {len(self.line_name)} Accepted Line(s) {self.check} and {len(self.all_fail)} Rejected Line(s) {self.cross} from the Category Database ')
+                else: 
+                    QLabel7 = QLabel(f'All {len(self.line_name)} were accepted by the Category Database {self.check}')
+
+                QLabel7.setAlignment(Qt.AlignCenter)
+                QLabel7.setFont(QFont('Inter', 10))
+                vboxdata2.addWidget(QLabel7)
+            
+            if len(self.all_fail) > 0 or len(self.post_rejected_lines) > 0 or len(self.post_rejected_blocks) > 0: 
+                dataerror2 = QLabel(f'{self.warning}See Database Results Tab for more details {self.warning}')
+                dataerror2.setAlignment(Qt.AlignCenter)
+                dataerror2.setFont(QFont('Inter', 10))
+                vbox2.addWidget(dataerror2)
+        
+            hboxdata.addLayout(vboxdata2)
+            vbox2.addLayout(hboxdata)   
 
         container_geo = QWidget()
         container_geo.setObjectName("summary_container")
@@ -615,6 +635,7 @@ class MyWindow(QMainWindow):
         self.table4.populate(self.filtered_walls)      
    
     def _update_status(self, app_state=None, reset=False):
+        """Function that resets teh status label based on weather there is a file imported"""
         if app_state is not None:
             self.app_state = app_state
 
@@ -673,6 +694,11 @@ class MyWindow(QMainWindow):
         return filepath
 
     #reloading a file is a change to the interface is made 
+    def _open_edit_dialog(self, mode):
+        EditDialog(mode=mode, parent=self).exec_()
+        if self.original_filepath:
+            self.reload_file()
+
     def _open_directory_dialog(self):
         dialog = DatabaseDirectoryDialog(parent=self)
         dialog.exec_()
@@ -695,6 +721,12 @@ class MyWindow(QMainWindow):
         if dialog.exec_() == edit_tolerences.Accepted:
             if self.original_filepath:
                 self.reload_file()
+
+    def _open_boundary_dialog(self):
+        dialog = edit_boundary(parent=self)     
+        if dialog.exec_() == edit_boundary.Accepted:
+            if self.original_filepath:
+                self.reload_file()         
             
       
 
@@ -731,18 +763,17 @@ class MyWindow(QMainWindow):
         
         self._update_status('File Loaded ✅', False)
 
-        (_, self.on_line_points,
-        self.all_lines_table, self.wall_slope_intercept,
-        self.filtered_walls, self.mistake_points,
-        self.corrected_blocks, self.line_mistakes,
-        self.bedit_lines, _, _, _, _, self.line_duplicate_points,
-        self.post_accepted_blocks, self.post_accepted_lines,
-        self.post_rejected_blocks, self.post_rejected_lines,
-        self.line_name, self.all_fail, self.blocks_fil, self.bed_check,
-        self.fixed_lines, self.fixed_line_refs, self.all_walls, self.wall_point_refs, self.bedit_mistake_points,
-        self.bedit_corrected_blocks, _, _, self.blockname_unmatched, self.linename_unmatched, _, _) = result
+        (doc, self.on_line_points, self.all_lines_table, 
+            self.wall_slope_intercept, self.filtered_walls, self.mistake_points, 
+            self.corrected_blocks, self.line_mistakes, self.bedit_lines, 
+            self.line_duplicate_points, self.post_accepted_blocks, self.post_accepted_lines, 
+            self.post_rejected_blocks, self.post_rejected_lines, self.line_name, self.all_fail, 
+            self.blocks_fil, self.bed_check, self.fixed_lines, self.all_walls, self.wall_point_refs, 
+            self.bedit_mistake_points, self.bedit_corrected_blocks,
+            self.mistake_block_reason, self.mistake_line_reason, self.blockname_unmatched, self.linename_unmatched) = result 
 
-        self.create_results_tab()
+        if len(self.on_line_points) > 0 or len(self.wall_slope_intercept) > 0 or len(self.all_fail) > 0 or len(self.filtered_walls) > 0: 
+            self.create_results_tab()
 
         if len(self.mistake_points) > 0 or len(self.line_mistakes) > 0:
             self.results_fixation()
@@ -750,10 +781,7 @@ class MyWindow(QMainWindow):
             self.database_results()
         self.results_summary()
 
-        # if dwgcheck: 
-        #     QMessageBox.information(None, "Success", f"File loaded:\n{dwgcheck}") 
-        # else:    
-        #     QMessageBox.information(None, "Success", f"File loaded:\n{filepath}")  
+    
 
     def extract_oda_directory(self):
         exe_dir = DatabaseDirectoryDialog.detect_install_location()
@@ -786,13 +814,14 @@ class MyWindow(QMainWindow):
                     None, "View DXF File Issues",
                     self.original_filepath.replace('.dxf', '_potential_issues.dxf'),
                     "DXF Files (*.dxf)")
-                try:
-                    # NEW FUNCTION - modifies file in place
-                    update_dxf_in_place(self.original_filepath, output_filepath)
-                    QMessageBox.information(None, "Success", f"Potential mistakes saved to:\n{output_filepath}")
+                
+                
+                # NEW FUNCTION - modifies file in place
+                update_dxf_in_place(self.original_filepath, output_filepath)
+                QMessageBox.information(None, "Success", f"Potential mistakes saved to:\n{output_filepath}")
                     
-                except Exception as e:
-                    QMessageBox.critical(None, "Error", f"Failed to create file:\n{str(e)}")
+                # except Exception as e:
+                #     QMessageBox.critical(None, "Error", f"Failed to create file:\n{str(e)}")
 
             if self.output_file_type == 'DWG': 
                 #call function to output dwg 

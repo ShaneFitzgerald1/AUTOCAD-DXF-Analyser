@@ -31,7 +31,7 @@ class presentation:
                 on_line_points.append([name, x, y, angle, wall, wall_type, on_line, mistake, 'No'])
 
         for line in all_lines:
-            name, x_start, y_start, x_end, y_end, offset = line
+            name, x_start, y_start, x_end, y_end, offset, line_ref = line
 
             if any(abs(x_start - wall_x) <= tolerance for wall_x in wall_x_coords):  # Check if line is on a vertical wall (x_start == x_end and that x is a wall x)
                     all_lines_table.append([name, x_start, y_start, x_end, y_end, 'Yes'])
