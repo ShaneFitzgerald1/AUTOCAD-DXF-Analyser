@@ -76,7 +76,7 @@ class Mathematical:
 
 
     @staticmethod
-    def Shape_outline(Blockref_Points, all_walls, x_min, x_max, y_min, y_max):
+    def filter_blocks_walls(Blockref_Points, all_walls, x_min, x_max, y_min, y_max):
         #This function Filters the Block References and Points to ensure any unwanted Points are not picked up
         filtered_blockref = []
 
@@ -144,6 +144,9 @@ class Mathematical:
         for block in blockrefs: 
             block_name, x, y, angle, _, block_ref = block 
             on_channel = 'No'
+
+            if x is None or y is None: 
+                break 
 
             for i in range(len(wall_slopes)): 
                 wall_slope = wall_slopes[i]
@@ -236,8 +239,8 @@ class Mathematical:
 
                 if name_m == name: 
                     matched = True
-                    if abs(x_m - x) < 0.01 and abs(y_m - y) < 0.01: 
-                        finals_corrected_blocks.append([name, None, None, None, None])
+                    if abs(x_m - x) < 0.01 and abs(y_m - y) < 0.01:
+                        finals_corrected_blocks.append([name, None, None, None, None, block_ref])
                     else: 
                         finals_corrected_blocks.append([name, x, y, angle, name_error, block_ref])
                     break 
@@ -246,5 +249,7 @@ class Mathematical:
                 finals_corrected_blocks.append([name, x, y, angle, name_error, block_ref])
 
         return finals_corrected_blocks               
+    
+
 
             

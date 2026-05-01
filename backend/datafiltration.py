@@ -16,22 +16,13 @@ class datafiltration:
        find_line_error: Locates any line errors 
        fix_line_error: Fixes any line errors 
        find_fixed_line_points: Finds exact points that mistakes occur within lines so they are flagged in corrected dxf """
-
-    # def extract_values_from_tolerance_sets(self):
-    #     active_tolerances = get_active_tolerances()
-    #     block_tolerance = float(active_tolerances.get('block_tolerance'))
-    #     line_tolerance1 = float(active_tolerances.get('line_tolerance_1'))
-    #     line_tolerance2 = float(active_tolerances.get('line_tolerance_2'))
-
-    #     return block_tolerance, line_tolerance1, line_tolerance2
-
-        
+    
     @staticmethod
-    def remove_duplicate_lines(all_lines):
+    def flag_duplicate_lines(all_lines):
         seen = []
-        line_duplicates_points = []
+        line_duplicates = []
         
-        for idx, line in enumerate(all_lines):
+        for line in all_lines:
             name, x_start, y_start, x_end, y_end, offset, line_ref = line
             
             # Normalise direction so A->B and B->A are treated as the same line
@@ -39,28 +30,24 @@ class datafiltration:
             key = (name, coords)
             
             if key in seen:
-                line_duplicates_points.append([name, x_start, y_start, x_end, y_end, line_ref, f'{name} is a duplicate line'])
+                line_duplicates.append([name, x_start, y_start, x_end, y_end, line_ref, f'{name} is a duplicate line'])
             else:
                 seen.append(key)
      
-        return line_duplicates_points
+        return line_duplicates
     
     @staticmethod
-    def On_Channel_Line(Blockref_Points, all_walls, line_properties, bedit_check, tolerance1, tolerance2, x_min, x_max, y_min, y_max):
+    def On_Channel_Line(filtered_blockref, filtered_walls, line_properties, bedit_check, tolerance1, tolerance2):
         """This function checks all block references to see if they are on a line. If Yes a Correct result is appended
            If blcoks are within lines to a certain degree their position is fixed to the line using minimum perpendicular distance to a line
            If there the block reference is near no lines an error is return 
            Function inputs: Filepath, Tolerence1 (if something is within this its not a mistake), Tolerence2 if it falls within this and outside T1 its a mistake """
-
-        filtered_blockref, filtered_walls = maths.Shape_outline(Blockref_Points, all_walls, x_min, x_max, y_min, y_max)
-
 
         blocks_on_line= []
         mistake_points = []
         correct_blocks = []
         corrected_blocks = []
         mistake_exp = []
-        correct_block_name_error = [] #special list for name errors to find bedit errors 
 
         # Use enumerate to get both index and block data
         for block in filtered_blockref:
@@ -93,7 +80,6 @@ class datafiltration:
                     if distance <= tolerance1: #if the distance is less than the tolerance we've found a match, this logic applies to all cases 
                         blocks_on_line.append([name, x, y, angle, i, 'vertical', 'On Line', 'Exact'])  #store for interface table presentation 
                         correct_blocks.append([name, x, y, angle, name_error, block_ref])   #Store for creating new dxf 
-                        correct_block_name_error.append([name, x, y, name_error, line_name, block_ref])
                         found_match = True
                         break
                 
@@ -105,7 +91,6 @@ class datafiltration:
                     if distance <= tolerance1:
                         blocks_on_line.append([name, x, y, angle, i, 'normal', 'On Line', 'Exact'])
                         correct_blocks.append([name, x, y, angle, name_error, block_ref])
-                        correct_block_name_error.append([name, x, y, name_error, line_name, block_ref])
                         found_match = True
                         break
             
@@ -171,44 +156,44 @@ class datafiltration:
                             break
             
             if not found_match: #No matches found at all within either tolerence return an error
-                blocks_on_line.append([name, x, y, angle, None, None, 'Not On Line', 'Error']) 
-                x_fixed = None 
-                y_fixed = None 
-                mistake_points.append([name, x, y, x_fixed, y_fixed, block_ref])
-                corrected_blocks.append([name, x, y, angle, name_error, block_ref])
+                blocks_on_line.append([name, x, y, angle, None, None, 'Not On Line', 'Error'])
+                mistake_points.append([name, x, y, None, None, block_ref])
+                corrected_blocks.append([name, None, None, None, None, block_ref])
                 mistake_exp.append([name, x, y, None, name_error, block_ref])
 
         (final_correct_blocks, final_corrected_blocks, 
-         final_mistake_blocks, name_error_reason) = datafiltration.filter_name_errors(correct_blocks, corrected_blocks, mistake_points, correct_block_name_error, mistake_exp, bedit_check)  
+         final_mistake_blocks, name_error_reason) = datafiltration.filter_name_errors(correct_blocks, corrected_blocks, mistake_points, mistake_exp, bedit_check)  
 
         all_blocks_correct_test = final_correct_blocks + final_corrected_blocks
         
-        return blocks_on_line, final_mistake_blocks, final_corrected_blocks, filtered_walls, correct_blocks, all_blocks_correct_test, mistake_points, corrected_blocks, name_error_reason
+        return blocks_on_line, final_mistake_blocks, final_corrected_blocks, all_blocks_correct_test, mistake_points, corrected_blocks, name_error_reason
      
 
     @staticmethod
-    def filter_name_errors(correct_blocks, corrected_blocks, mistake_points, correct_block_name_error, mistake_exp, bedit_check):
+    def filter_name_errors(correct_blocks, corrected_blocks, mistake_points, mistake_exp, bedit_check):
         """Function that filters through all blocks to see if there is a name error and returns it as a mistake""" 
         final_correct_blocks = []
         mistake_blocks_name = []
         name_error_reason = [] #list for explaing reasons due to a bedit 
         
+        #Copying the already corrected blocks into the final list, then append any name erros to that list. 
         final_corrected_blocks = list(corrected_blocks)
 
-        for idx, block in enumerate(correct_blocks):
+        for block in correct_blocks:
             name, x, y, angle, name_error, block_ref = block
 
             if name_error is not None:
                 final_corrected_blocks.append(block)
                 mistake_blocks_name.append([name_error, x, y, angle, name_error, block_ref])
-                
+                if bedit_check != 1:
+                    name_error_reason.append([name, x, y, None, True, False, block_ref])
             else:
-                final_correct_blocks.append(block) 
+                final_correct_blocks.append(block)
 
-        for block in correct_block_name_error: # IF there is no mistake on block position but its inside a bedit 
-            name, x, y, name_error, line_name, block_ref = block 
-            if name_error is not None and bedit_check != 1 : 
-                name_error_reason.append([name, x, y, line_name, True, False, block_ref])
+        # for block in correct_block_name_error: # IF there is no mistake on block position but its inside a bedit 
+        #     name, x, y, name_error, line_name, block_ref = block 
+        #     if name_error is not None and bedit_check != 1 : 
+        #         name_error_reason.append([name, x, y, line_name, True, False, block_ref])
 
         for block in mistake_exp: 
             name, x, y, line_name, name_error, block_ref = block 
@@ -216,14 +201,13 @@ class datafiltration:
                 name_error_reason.append([name, x, y, line_name, True, True, block_ref])
             else: 
                 name_error_reason.append([name, x, y, line_name, False, True, block_ref])            
-
             
         final_mistake_blocks = mistake_blocks_name + mistake_points
 
         return final_correct_blocks, final_corrected_blocks, final_mistake_blocks, name_error_reason
     
     @staticmethod 
-    def find_line_error(all_lines, all_walls, line_properties, wall_slopes, wall_intercepts, tolerance1, tolerance2, tolerance3, x_min, x_max, y_min, y_max): 
+    def find_line_error(filtered_lines, all_walls, line_properties, wall_slopes, wall_intercepts, tolerance1, tolerance2, tolerance3): 
         """This function goes through all the lines searching for errors. All lines should start and end at another line 
            Unless it is on the channel outline in which case the check just ensures hte line is on the channel outline  
            The code ensures that the end points of each line are on another line, there is a clause to prevent a line from checking itself against its own line
@@ -237,14 +221,15 @@ class datafiltration:
         line_line_connections_check = []
         line_mistakes_check = []
         situation_where = []
-   
-        filtered_lines = maths.filter_lines(all_lines, x_min, x_max, y_min, y_max)
+
         lines_OCO, lines_not_OCO, _= maths.Chanel_check_line(wall_slopes, wall_intercepts, filtered_lines, all_walls)
 
         correct_lines.extend(lines_OCO)
 
         for line in lines_not_OCO:  #Each start and end ponit of the line are checked against the slope and intercepts of the checker lines 
             name, x_start, y_start, x_end, y_end, offset, line_ref = line 
+
+            line_key = (name, tuple(sorted([(x_start, y_start), (x_end, y_end)])))
          
             start_matches = False 
             end_matches = False 
@@ -279,6 +264,8 @@ class datafiltration:
 
             for prop_line in line_properties: #These are the checker lines all lines (not on the channel outline) are checked 
                 line_name, slope, intercept, x_s, y_s, x_e, y_e = prop_line
+
+                line_checker_key = (name, tuple(sorted([(x_start, y_start), (x_end, y_end)])))
                 
                 same_line_forward = (abs(x_s - x_start) < 0.01 and abs(y_s - y_start) < 0.01 and #avoid checking a line against itself 
                                     abs(x_e - x_end) < 0.01 and abs(y_e - y_end) < 0.01)
@@ -417,7 +404,7 @@ class datafiltration:
                 line_mistakes_check.append([name, x_start, y_start, x_end, y_end, start_line_name, end_line_name])  
                 line_line_connections.append([name, start_line_name, end_line_name, x_start, y_start, x_end, y_end, line_ref])  
                 # situation_where.append([name, x_start, y_start, x_s_checker_start, y_s_checker_start, x_e_checker_start, y_e_checker_start,
-                #                      x_end, y_end, x_s_checker_end, y_s_checker_end, x_e_checker_end, y_e_checker_end])
+                #                      x_end, y_end, x_s_checker_end, y_s_checker_end, x_e_checker_end, y_e_checker_end])  
           
         return line_mistakes, correct_lines, line_line_connections, line_line_connections_check
     
@@ -429,7 +416,6 @@ class datafiltration:
            The function returns a list of fixed lines with their name, position, layer, and colour. """
         
         fixed_lines = []
-        fixed_lines_box = []
         line_mistake_explain = []
         
         for line in line_mistakes: 
@@ -444,7 +430,6 @@ class datafiltration:
                 new_y_end = y_end
 
                 fixed_lines.append([name, new_x_start, new_y_start, new_x_end, new_y_end, False, line_ref]) #Append these results so they are no longer checked
-                fixed_lines_box.append([name, new_x_start, new_y_start, new_x_end, new_y_end, closest_start_slope, closest_start_intercept, closest_end_slope, closest_end_intercept])
                 continue
 
             elif x_start == x_end:  # Vertical line
@@ -492,31 +477,23 @@ class datafiltration:
                         new_x_end, new_y_end = x_end, y_end
 
             fixed_lines.append([name, new_x_start, new_y_start, new_x_end, new_y_end, False, line_ref])
-            fixed_lines_box.append([name, new_x_start, new_y_start, new_x_end, new_y_end, closest_start_slope, closest_start_intercept, closest_end_slope, closest_end_intercept])
             line_mistake_explain.append([name, x_start, y_start, x_end, y_end, new_x_start,
                                          new_y_start, new_x_end, new_y_end, line_start_name, line_end_name, line_ref])
 
-        return fixed_lines, fixed_lines_box, line_mistake_explain
+        return fixed_lines, line_mistake_explain
     
     @staticmethod
     def filter_offset_lines(correct_lines, line_mistakes): 
         """Function that filters offset lines in the case that all objects inside a module are inside a single block referernce"""
-        final_correct_lines = []
-        final_mistake_lines = []
+        bedit_lines = []
 
-        for idx, line in enumerate(line_mistakes): 
+        bedit_lines = list(correct_lines) 
+
+        for line in line_mistakes: 
             (name, x_start, y_start, x_end, y_end,_, _, _,_, _, _, line_ref) = line
-            final_mistake_lines.append([name, x_start, y_start, x_end, y_end, False, line_ref])       
+            bedit_lines.append([name, x_start, y_start, x_end, y_end, False, line_ref])       
 
-        for idx, line in enumerate(correct_lines): 
-            name, x_start, y_start, x_end, y_end, offset, line_ref = line 
-            if offset: 
-                final_mistake_lines.append([name, x_start, y_start, x_end, y_end, offset, line_ref])
-
-            else: 
-                final_correct_lines.append([name, x_start, y_start, x_end, y_end, offset, line_ref])   
-
-        return final_mistake_lines, final_correct_lines        
+        return bedit_lines       
 
 
 
@@ -524,11 +501,17 @@ class datafiltration:
     @staticmethod
     def find_line_line_connections(fixed_lines, wall_slopes, wall_intercepts, all_walls, line_line_connections_check, line_line_connections):
         "finds lines that only connect between lines"
+
+        """There is a rare scenario where there a line mistake and it is off the channel outline, when it should be
+        For example: A 60 Header goes too far past a block. The code will initially think this line is off the channel outline. 
+        We take the fixed points (suggested fix) and then see here if it is on the channel outline
+        If it is on the channel outline it will be noticed here and it won't be added to the line line connections ensuring no error arises from database"""
         
         lines_OCO, _, _ = maths.Chanel_check_line(wall_slopes, wall_intercepts, fixed_lines, all_walls)
         
         ll_connections = []
 
+        #Line line connections check are the mistake lines that needed to be checker to ennsure they don't lie on the channel outline 
         #the below code ensures any lines arnt mistakenly added to the line line connection type
         #lines on the channel outline should not be in this category they are in the line block type as they follow different rules
         for line_l in line_line_connections_check: 
@@ -544,7 +527,6 @@ class datafiltration:
                     ll_connections.append([name, start_line_name, end_line_name, x_start_c, y_start_c, x_end_c, y_end_c, line_ref])
             
         final_line_line_connections = line_line_connections + ll_connections 
-    
         return final_line_line_connections    
     
 
@@ -562,6 +544,9 @@ class datafiltration:
          
             for block in block_tolerences: 
                 block_name, x, y, x_tolerence, y_tolerence = block 
+
+                if x is None or y is None: 
+                    continue 
 
                 tol = 1
 
@@ -602,7 +587,7 @@ class datafiltration:
     
     def filter_line_block_connections(self, line_block_connections): 
         filtered_line_conn = []
-        for idx, line in enumerate(line_block_connections): 
+        for line in line_block_connections:
             name, block_name_start, block_name_end, x_start, y_start, x_end, y_end, line_ref = line 
             if (block_name_start is None or block_name_start == 'TRUSS VERTICAL') and (block_name_end is None or block_name_end == 'TRUSS VERTICAL'): 
                 continue 
@@ -638,52 +623,7 @@ class datafiltration:
 
             block_tolerences.append([name, x, y, x_tolerence, y_tolerence])
         return block_tolerences   
-    
 
-    @staticmethod
-    def find_fixed_line_points(line_mistakes, fix_line_box): 
-        """Lines are stored with their start and end values so we need another function to determine precisley what point the mistake was at so it can be highlighted in dxf 
-           this function checks for differnce between line mistakes and fixed lines to see what points change, the points that change are appended"""
-
-        line_mistake_points = []
-        find_error = []
-        none_error = []
-        
-        for i in range(len(line_mistakes)): 
-            line_mistake = line_mistakes[i]
-            fixed_line = fix_line_box[i]
-    
-            x_start_m = line_mistake[1]
-            y_start_m = line_mistake[2]
-            x_end_m = line_mistake[3]
-            y_end_m = line_mistake[4]
-
-            x_start_f = fixed_line[1]
-            y_start_f = fixed_line[2]
-            x_end_f = fixed_line[3]
-            y_end_f = fixed_line[4]
-            cl_st_slope = fixed_line[5]
-            cl_st_intercept = fixed_line[6]
-            cl_ed_slope = fixed_line[7]
-            cl_ed_intercept = fixed_line[8]
-
-            if abs(x_start_m - x_start_f) >= 0.1 or abs(y_start_m - y_start_f) >= 0.1: 
-                line_mistake_points.append([x_start_m, y_start_m])
-                find_error.append([x_start_f, y_start_f])
-
-            if abs(x_end_m - x_end_f) >= 0.1 or abs(y_end_m - y_end_f) >= 0.1: 
-                line_mistake_points.append([x_end_m, y_end_m]) 
-                find_error.append([x_end_f, y_end_f])
-            
-            if cl_st_slope is None and cl_st_intercept is None: 
-                line_mistake_points.append([x_start_m, y_start_m]) 
-                none_error.append({x_start_f, y_start_f}) 
-                    
-            if cl_ed_slope is None and cl_ed_intercept is None: 
-                line_mistake_points.append([x_end_m, y_end_m])
-                none_error.append([x_end_f, y_end_f])    
-
-        return line_mistake_points  
     
 
     

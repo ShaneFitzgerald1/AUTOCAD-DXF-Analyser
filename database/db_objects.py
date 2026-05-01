@@ -35,11 +35,12 @@ def get_category_catalogue():
         session.close()   
 
 
-def name_match_block(blockrefs, lines, actual_type, wall_slopes, wall_intercepts, all_walls): 
+def explain_object_db(blockrefs, lines, actual_type, wall_slopes, wall_intercepts, all_walls): 
     block_tol, _, _ = extract_values_from_tolerance_sets()
     blocks = maths.Channel_check_block(wall_slopes, wall_intercepts, blockrefs, block_tol)
 
     _, _, lines_cl = maths.Chanel_check_line(wall_slopes, wall_intercepts, lines, all_walls)
+
 
     # print(f'These are the ordered lines sit {ordered_refs}')
     objects = get_catalogue()
@@ -53,8 +54,6 @@ def name_match_block(blockrefs, lines, actual_type, wall_slopes, wall_intercepts
     # Build lookup lists from catalogue
     valid_insert_names = []
     valid_line_names = []
-
-    # print(f'Amount of objects {len(objects)}')
 
     for object in objects:
         name, type, category, on_channel_outline = object
@@ -93,7 +92,7 @@ def name_match_block(blockrefs, lines, actual_type, wall_slopes, wall_intercepts
         return accepted_block_names, rejected_block_names, blockname_unmatched
 
     if actual_type == 'LINE':
-        for idx, line in enumerate(lines_cl):
+        for line in lines_cl:
             actual_l_name, x_s, y_s, x_e, y_e, on_channel, line_ref = line
             line_name_matched = False
             channel_verified = False
@@ -123,15 +122,16 @@ def name_match_block(blockrefs, lines, actual_type, wall_slopes, wall_intercepts
             if not line_name_matched and channel_verified:
                 rejected_line_names.append([actual_l_name, x_s, y_s, x_e, y_e, f'Line rejected: {actual_l_name} is not present in the DataBase', line_ref])
             if not line_name_matched:    
-                linename_unmatched.append(actual_l_name) 
+                linename_unmatched.append(actual_l_name)   
 
         return accepted_line_names, rejected_line_names, linename_unmatched
     
 
-def before_after(fixed_all_blocks, blockrefs, lines, correct_lines, fixed_lines, wall_slopes, wall_intercepts, all_walls):
+def object_db_results(fixed_all_blocks, blockrefs, lines, correct_lines, fixed_lines, wall_slopes, wall_intercepts, all_walls):
         
     # correct_lines.extend(fixed_lines)
     all_correct_lines = correct_lines + fixed_lines
+
 
     sort_blockrefs = []
     
@@ -146,8 +146,8 @@ def before_after(fixed_all_blocks, blockrefs, lines, correct_lines, fixed_lines,
             sort_blockrefs.append([name, x, y, angle, name_error])    
 
     #All accepted and rejected blocks post check, if an error arised here this is a big issue
-    post_accepted_block, post_rejected_block, blockname_unmatched = name_match_block(fixed_all_blocks, all_correct_lines, 'INSERT', wall_slopes, wall_intercepts, all_walls)
-    post_accepted_line, post_rejected_lines, linename_unmatched = name_match_block(fixed_all_blocks, all_correct_lines, 'LINE', wall_slopes, wall_intercepts, all_walls)
+    post_accepted_block, post_rejected_block, blockname_unmatched = explain_object_db(fixed_all_blocks, all_correct_lines, 'INSERT', wall_slopes, wall_intercepts, all_walls)
+    post_accepted_line, post_rejected_lines, linename_unmatched = explain_object_db(fixed_all_blocks, all_correct_lines, 'LINE', wall_slopes, wall_intercepts, all_walls)
 
     return post_accepted_block, post_accepted_line, post_rejected_block, post_rejected_lines, blockname_unmatched, linename_unmatched
 
@@ -302,31 +302,35 @@ def dxf_mistake_block_explained(mistake_exp):
 
     for block in mistake_exp:
         name, x, y, line_name, name_error, mistake, block_ref = block 
-         
-        if line_name is None: 
+
+
+        if name_error and not mistake and line_name is None:
+            mistake_block_reason.append([name, x, y, f'{name} is inside a BEDIT', block_ref])
+
+        elif name_error and mistake and line_name is None:
+            mistake_block_reason.append([name, x, y, f'{name} is not near any line and is inside a BEDIT', block_ref])
+
+        elif not name_error and mistake and line_name is None:
             mistake_block_reason.append([name, x, y, f'{name} is not near any line', block_ref])
 
-        if name_error and not mistake: 
-            mistake_block_reason.append([name, x, y, f'{name} is inside a BEDIT', block_ref ])    
-
-        else:   
+        else:
             category = get_category(line_name)
 
-            for db_categories in categories: 
+            for db_categories in categories:
                 db_category, allowed_connections, double_connection, on_channel = db_categories
 
-                if name_error and mistake: 
-                    if db_category == category: 
-                        if on_channel == 'Yes': 
+                if name_error and mistake:
+                    if db_category == category:
+                        if on_channel == 'Yes':
                             mistake_block_reason.append([name, x, y, f'{name} is not on the Channel Outline', block_ref])
                         if on_channel == 'No':
-                            mistake_block_reason.append([name, x, y, f'{name} is not on {line_name}', block_ref])    
-                if not name_error and mistake: 
-                    if db_category == category: 
-                        if on_channel == 'Yes': 
+                            mistake_block_reason.append([name, x, y, f'{name} is not on {line_name}', block_ref])
+                if not name_error and mistake:
+                    if db_category == category:
+                        if on_channel == 'Yes':
                             mistake_block_reason.append([name, x, y, f'{name} is not on the Channel Outline', block_ref])
                         if on_channel == 'No':
-                            mistake_block_reason.append([name, x, y, f'{name} is not on {line_name}', block_ref])    
+                            mistake_block_reason.append([name, x, y, f'{name} is not on {line_name}', block_ref])
     return mistake_block_reason       
 
 def dxf_mistake_line_explained(line_mistake_explain): 

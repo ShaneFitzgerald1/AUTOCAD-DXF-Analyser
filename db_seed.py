@@ -130,7 +130,7 @@ def seed_database():
 
 category_line_data = [
     {'category': 'TRUSS LINE' , 'allowed_connections' : ('TRUSS LINE' , 'HEADER', 'WALL LINE', 'CILL LINE', 'BRACE LINE', 'SHS TRUSS LINE', 'CHANNEL OUTLINE', 'STUD', 'OTHER'), 'double_connection': 'No', 'on_channel': 'No'}, 
-    {'category': 'TRUSS BRACING', 'allowed_connections': ('TRUSS LINE' , 'HEADER', 'WALL LINE', 'CILL LINE', 'BRACE LINE', 'SHS TRUSS LINE', 'CHANNEL OUTLINE'), 'double_connection': 'Yes', 'on_channel': 'No'},
+    {'category': 'TRUSS BRACING', 'allowed_connections': ('TRUSS LINE' , 'HEADER', 'WALL LINE', 'CILL LINE', 'BRACE LINE', 'SHS TRUSS LINE', 'CHANNEL OUTLINE'), 'double_connection': 'No', 'on_channel': 'No'},
     {'category': 'SHS TRUSS LINE', 'allowed_connections': ('TRUSS LINE' , 'HEADER', 'WALL LINE', 'CILL LINE', 'BRACE LINE', 'SHS TRUSS LINE', 'CHANNEL OUTLINE'), 'double_connection': 'No', 'on_channel': 'No'},
     {'category': 'HEADER', 'allowed_connections': ('CP', 'STUD'), 'double_connection': 'Yes', 'on_channel': 'Yes'},
     {'category': 'CILL LINE', 'allowed_connections': ('STUD','OTHER'), 'double_connection': 'Yes', 'on_channel': 'Yes' },

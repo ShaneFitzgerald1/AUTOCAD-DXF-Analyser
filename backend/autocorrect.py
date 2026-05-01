@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from backend.mathematical import Mathematical
 from backend.guipresentation import presentation
 from backend.datafiltration import datafiltration
-from database.db_objects import before_after, validate_categories, dxf_mistake_block_explained, dxf_mistake_line_explained
+from database.db_objects import object_db_results, validate_categories, dxf_mistake_block_explained, dxf_mistake_line_explained
 from database.tolerance_config import extract_values_from_tolerance_sets, extract_boundary_values
 
 maths = Mathematical()
@@ -186,53 +186,58 @@ def autocad_points(filepath):
         return None 
 
     else: 
+        #extracting set values 
         x_min, x_max, y_min, y_max = extract_boundary_values()
-        filtered_lines = maths.filter_lines(all_lines, x_min, x_max, y_min, y_max)
-        filtered_blockref, filtered_walls = maths.Shape_outline(Blockref_Points, all_walls, x_min, x_max, y_min, y_max)
-
-        wall_lengths = maths.wall_len(filtered_lines)  
-        slopes, y_intercepts, line_properties, wall_slopes, wall_intercepts = maths.slope_values(filtered_lines, filtered_walls) 
-        wall_slope_intercept = pres.combine_slope_walls(wall_lengths, slopes, y_intercepts)
-
         block_tolerance, line_tolerance1, line_tolerance2 = extract_values_from_tolerance_sets()
 
-        (blocks_on_line, mistake_points, final_corrected_blocks, filtered_walls,
-        correct_blocks, fixed_all_blocks, bedit_mistake_points,
-        bedit_corrected_blocks, mistake_exp) = filter.On_Channel_Line(Blockref_Points, all_walls, line_properties, bedit_check, block_tolerance, tolerance2=5, x_min=x_min, x_max=x_max, y_min=y_min, y_max=y_max)
+        #filtering blocks and lines to ensure they are within the boundaries 
+        filtered_lines = maths.filter_lines(all_lines, x_min, x_max, y_min, y_max)
+        filtered_blockref, filtered_walls = maths.filter_blocks_walls(Blockref_Points, all_walls, x_min, x_max, y_min, y_max)
+
+        #backend maths 
+        wall_lengths = maths.wall_len(filtered_lines)  
+        slopes, y_intercepts, line_properties, wall_slopes, wall_intercepts = maths.slope_values(filtered_lines, filtered_walls) 
         
+        #Geometry Engine 
+        (blocks_on_line, mistake_points, final_corrected_blocks,fixed_all_blocks, 
+         bedit_mistake_points, bedit_corrected_blocks, 
+         mistake_exp) = filter.On_Channel_Line(filtered_blockref, filtered_walls, line_properties, bedit_check, block_tolerance, tolerance2=5)
+
         on_line_points, all_lines_table = pres.what_line(blocks_on_line, filtered_walls, filtered_lines, tolerance = 1)
+
         (line_mistakes, correct_lines, 
-         line_line_connections, line_line_connections_check) = filter.find_line_error(all_lines, all_walls, line_properties, wall_slopes, wall_intercepts, line_tolerance1, 25, line_tolerance2, x_min, x_max, y_min, y_max)
-        fixed_lines, fixed_lines_box, line_mistake_exp = filter.fix_line_mistakes(line_mistakes)
+         line_line_connections, line_line_connections_check) = filter.find_line_error(filtered_lines, all_walls, line_properties, wall_slopes, wall_intercepts, line_tolerance1, 25, line_tolerance2)
+        
+        fixed_lines, line_mistake_exp = filter.fix_line_mistakes(line_mistakes)
 
-        (final_fixed_lines, final_correct_lines) = filter.filter_offset_lines(correct_lines, line_mistakes)
+        bedit_lines= filter.filter_offset_lines(correct_lines, line_mistakes)
 
-        line_mistake_points = filter.find_fixed_line_points(line_mistakes, fixed_lines_box)
+        line_duplicates = filter.flag_duplicate_lines(all_lines)
 
-        line_duplicate_points = filter.remove_duplicate_lines(all_lines)
+        #Gui 
+        wall_slope_intercept = pres.combine_slope_walls(wall_lengths, slopes, y_intercepts) #for presentation in gui table 
 
+        #Database 
+        print(f'this is the line mistakes {len(line_mistakes)}')
+        print(f'These are the correct lines {len(correct_lines)}')
         (post_accepted_blocks, post_accepted_lines,
         post_rejected_block, post_rejected_lines,
-        blockname_unmatched, linename_unmatched) = before_after(fixed_all_blocks, filtered_blockref, all_lines, correct_lines, fixed_lines, wall_slopes, wall_intercepts, all_walls)
+        blockname_unmatched, linename_unmatched) = object_db_results(fixed_all_blocks, filtered_blockref, all_lines, correct_lines, fixed_lines, wall_slopes, wall_intercepts, all_walls)
 
         line_block_connections = filter.link_line_block_connections(correct_lines, fixed_lines, fixed_all_blocks)
 
         final_line_line_connections = filter.find_line_line_connections(fixed_lines, wall_slopes, wall_intercepts, all_walls, line_line_connections_check, line_line_connections)
 
         line_name, all_fail = validate_categories(final_line_line_connections, line_block_connections)
-        finals_corrected_blocks = maths.return_error(final_corrected_blocks, mistake_points)
 
         #mistake explainer 
         mistake_block_reason = dxf_mistake_block_explained(mistake_exp)
-    
         mistake_line_reason = dxf_mistake_line_explained(line_mistake_exp)
-
-
-        
+ 
         return (doc, on_line_points, all_lines_table, 
             wall_slope_intercept, filtered_walls, mistake_points, 
-            finals_corrected_blocks, line_mistakes, final_fixed_lines, 
-            line_duplicate_points, post_accepted_blocks, post_accepted_lines, 
+            final_corrected_blocks, line_mistakes, bedit_lines, 
+            line_duplicates, post_accepted_blocks, post_accepted_lines, 
             post_rejected_block, post_rejected_lines, line_name, all_fail, 
             blocks_fil, bedit_check, fixed_lines, all_walls, wall_point_refs, bedit_mistake_points, bedit_corrected_blocks,
             mistake_block_reason, mistake_line_reason, blockname_unmatched, linename_unmatched)
@@ -254,8 +259,8 @@ def update_dxf_in_place(filepath, output_filepath):
     (doc, on_line_points, all_lines_table, 
         wall_slope_intercept, filtered_walls, mistake_points, 
         corrected_blocks, line_mistakes, bedit_lines,  
-        duplicate_line_points, _, _, post_rejected_block, 
-        post_rejected_line, _, all_fail, blocks_fil, bedit_check, fixed_lines,all_walls, wall_point_refs, _, _,
+        duplicate_lines, _, _, post_rejected_block, 
+        post_rejected_line, _, all_fail, blocks_fil, bedit_check, fixed_lines, all_walls, wall_point_refs, _, _,
         mistake_block_reason, mistake_line_reasons, blockname_unmatched, linename_unmathced) = autocad_points(filepath)
     
     msp = doc.modelspace()
@@ -318,7 +323,7 @@ def update_dxf_in_place(filepath, output_filepath):
             copied.dxf.end = (x_end, y_end)
             bedit_line_map[line_ref] = copied
 
-        explain_mistakes_dxf(msp, duplicate_line_points, mistake_block_reason, mistake_line_reasons, post_rejected_block, post_rejected_line, all_fail, doc, bedit_line_map, bedit_block_map)
+        explain_mistakes_dxf(msp, duplicate_lines, mistake_block_reason, mistake_line_reasons, post_rejected_block, post_rejected_line, all_fail, doc, bedit_line_map, bedit_block_map)
 
         # Delete the container INSERT
         for insert in msp.query('INSERT'):
@@ -327,14 +332,14 @@ def update_dxf_in_place(filepath, output_filepath):
                 break
 
     else:
-        explain_mistakes_dxf(msp, duplicate_line_points, mistake_block_reason, mistake_line_reasons, post_rejected_block, post_rejected_line,
+        explain_mistakes_dxf(msp, duplicate_lines, mistake_block_reason, mistake_line_reasons, post_rejected_block, post_rejected_line,
                              all_fail, doc, {}, {})
 
     doc.saveas(output_filepath)
 
-def explain_mistakes_dxf(msp, duplicate_line_points, mistake_block_reason, mistake_line_reasons, post_rejected_block, post_rejected_line, all_fail, doc, bedit_line_map, bedit_block_map):
+def explain_mistakes_dxf(msp, duplicate_lines, mistake_block_reason, mistake_line_reasons, post_rejected_block, post_rejected_line, all_fail, doc, bedit_line_map, bedit_block_map):
 
-    sep_duplicate_lines = create_separation(duplicate_line_points, 'Duplicate')
+    sep_duplicate_lines = create_separation(duplicate_lines, 'Duplicate')
     for i, line in enumerate(sep_duplicate_lines):  # flagging a duplicate line
         name, x_s, y_s, x_e, y_e, line_ref, reason = line
         triangle1 = draw_triangle(msp, x_s, y_s)
