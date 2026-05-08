@@ -19,7 +19,8 @@ class Mathematical:
             delta_x = x_start - x_end
             delta_y = y_start - y_end
             distance = math.sqrt((delta_x)**2 + (delta_y)**2)
-            wall_lengths.append(distance)
+            round_distance = round(distance, 2)
+            wall_lengths.append(round_distance)
         return wall_lengths
     
     @staticmethod
@@ -56,12 +57,16 @@ class Mathematical:
     @staticmethod
     def calc_slope(x1, y1, x2, y2):
         if abs(x2 - x1) < 0.3:
-            slope = None
-            c = f'X Intercept {x1}'
+            slope_round = None
+            x1_round = round(x1, 3)
+            c = f'X Intercept {x1_round}'
         else:
             slope = (y2 - y1) / (x2 - x1)
-            c = y1 - (slope * x1)
-        return slope, c
+            slope_round = round(slope, 3)
+            c = y1 - (slope_round * x1)
+            c = round(c, 3)
+
+        return slope_round, c
     
 
     @staticmethod
@@ -155,12 +160,12 @@ class Mathematical:
                 if wall_slope is None: 
                     x_intercept = float(wall_intercept.split()[2])
                     x_d = abs(x_intercept - x)
-                    if x_d < block_tol: 
+                    if x_d < 3: 
                         on_channel = 'Yes'
                         break       
                 else: 
                     y_d = abs(y - (wall_slope * x + wall_intercept))
-                    if y_d < block_tol: 
+                    if y_d < 3: 
                         on_channel = 'Yes'
                         break 
 
@@ -215,7 +220,7 @@ class Mathematical:
                 lines_cl.append([name, x_start, y_start, x_end, y_end, 'Yes', line_ref])
             else:
                 lines_not_OCO.append([name, x_start, y_start, x_end, y_end, offset, line_ref])
-                lines_cl.append([name, x_start, y_start, x_end, y_end, 'No', line_ref])
+                lines_cl.append([name, x_start, y_start, x_end, y_end, 'No', line_ref])  
 
         return lines_OCO, lines_not_OCO, lines_cl              
             

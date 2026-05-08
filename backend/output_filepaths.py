@@ -1,18 +1,8 @@
 import sys, tempfile, shutil, os 
-from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtGui import QFont, QPixmap, QIcon
-from PyQt5.QtCore import Qt 
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QGridLayout, QTableWidget, QLabel, QSizePolicy, QHeaderView, QMessageBox, QFileDialog, QTableWidgetItem, QPushButton, QHBoxLayout, QTabWidget
 from backend.autocorrect import update_dxf_in_place
-from gui.base_table import BaseTable
-from utils import resource_path
-from gui.table_widget import LabeledTableWidget
-from gui.add_object_dialog import AddObjectDialog, database_description
-from gui.edit_database_dialog import EditDialog
-from database.database_directory import DatabaseDirectoryDialog
-from database.db_models import get_configured_db_path, get_db_path
 from backend.convertdwg import convertDWG_DXF, convertDXF_DWG
-from gui.set_output_file_type import SetOutputFileType
+
 
 
 """This file creates functions that output functions as speicfic type: DWG or DXF"""

@@ -1,8 +1,9 @@
 
 class presentation: 
     """This class establishes lists to allow for neat presenation of results inside GUI
-       This class contains two functions 
+       
        combine_slope_walls: combines wall slopes lengths and intercepts into a singular list so can be passed through base_table.py and table_widget.py 
+
        what_line: Filters if poins are on the channel outline for presentation in GUI table. """
 
     @staticmethod
@@ -42,16 +43,6 @@ class presentation:
 
         return on_line_points, all_lines_table
     
-    @staticmethod
-    def dxf_mistake_explained(wall_points, mistake_exp): 
-
-        mistake_block_reason = []
-
-        for block in mistake_exp:
-            name, x, y, line_name, xs, ys, xe, ye = block 
-            if abs(x - xs) <= 5 and abs(y-ys) <= 5: #figuring out what point is connected to what end of line 
-                mistake_block_reason.append([name, x, y, f'{name} is not on {line_name}'])
-
 
 
             

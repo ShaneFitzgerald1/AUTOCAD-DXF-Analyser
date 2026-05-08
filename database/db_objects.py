@@ -201,7 +201,7 @@ def validate_categories(line_line_connections, line_block_connections):
     quantity_fail = []
     both_fail = []
 
-    for idx, line in enumerate(all_connections): 
+    for line in all_connections: 
         line_name, line_category, line_start_category, line_end_category, x_start, y_start, x_end, y_end, line_ref = line #lines being checked 
         safe_connections_start = False 
         safe_connections_end = False 
@@ -218,7 +218,6 @@ def validate_categories(line_line_connections, line_block_connections):
             if cat == line_category: 
                 if line_start_category in allowed_list: #and line_end_category in allowed_list:  
                     safe_connections_start = True 
-                    # safe_connections_end = True 
 
                 if line_end_category in allowed_list: 
                     safe_connections_end = True     
@@ -292,6 +291,7 @@ def validate_categories(line_line_connections, line_block_connections):
 
 
     all_fail_cat = mand_fail + quantity_fail + both_fail 
+
     return correct_connections_cat, all_fail_cat
 
 def dxf_mistake_block_explained(mistake_exp): 

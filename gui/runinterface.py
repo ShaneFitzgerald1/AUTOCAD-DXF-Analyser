@@ -567,7 +567,7 @@ class MyWindow(QMainWindow):
                 if len(self.all_fail) > 0: 
                     QLabel7 = QLabel(f'There were {len(self.line_name)} Accepted Line(s) {self.check} and {len(self.all_fail)} Rejected Line(s) {self.cross} from the Category Database ')
                 else: 
-                    QLabel7 = QLabel(f'All {len(self.line_name)} were accepted by the Category Database {self.check}')
+                    QLabel7 = QLabel(f'All {len(self.line_name)} Lines were accepted by the Category Database {self.check}')
 
                 QLabel7.setAlignment(Qt.AlignCenter)
                 QLabel7.setFont(QFont('Inter', 10))
@@ -763,14 +763,14 @@ class MyWindow(QMainWindow):
         
         self._update_status('File Loaded ✅', False)
 
-        (doc, self.on_line_points, self.all_lines_table, 
+        (_, self.on_line_points, self.all_lines_table, 
             self.wall_slope_intercept, self.filtered_walls, self.mistake_points, 
-            self.corrected_blocks, self.line_mistakes, self.bedit_lines, 
+            self.corrected_blocks, self.line_mistakes, _, 
             self.line_duplicate_points, self.post_accepted_blocks, self.post_accepted_lines, 
-            self.post_rejected_blocks, self.post_rejected_lines, self.line_name, self.all_fail, 
-            self.blocks_fil, self.bed_check, self.fixed_lines, self.all_walls, self.wall_point_refs, 
+            self.post_rejected_blocks, self.post_rejected_lines, self.line_name, self.all_fail, _,
+            self.bed_check, self.fixed_lines, _, _, 
             self.bedit_mistake_points, self.bedit_corrected_blocks,
-            self.mistake_block_reason, self.mistake_line_reason, self.blockname_unmatched, self.linename_unmatched) = result 
+            _, _, self.blockname_unmatched, self.linename_unmatched) = result 
 
         if len(self.on_line_points) > 0 or len(self.wall_slope_intercept) > 0 or len(self.all_fail) > 0 or len(self.filtered_walls) > 0: 
             self.create_results_tab()
