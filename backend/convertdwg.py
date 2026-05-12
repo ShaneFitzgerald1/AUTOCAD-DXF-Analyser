@@ -1,11 +1,5 @@
-import ezdxf
-from ezdxf.lldxf import const
 import subprocess
 import os
-import numpy as np
-import pandas as pd
-import math
-import json5
 
 ###----NOTES ON DWG CONVERSION----###
 """

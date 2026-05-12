@@ -1,21 +1,20 @@
-import sys, tempfile, shutil, os 
-from PyQt5 import QtCore, QtGui, QtWidgets
+import tempfile, shutil, os 
 from PyQt5.QtGui import QFont, QPixmap, QIcon
 from PyQt5.QtCore import Qt 
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QGridLayout, QTableWidget, QLabel, QSizePolicy, QHeaderView, QMessageBox, QFileDialog, QTableWidgetItem, QPushButton, QHBoxLayout, QTabWidget, QAction
+from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QGridLayout, QLabel, QMessageBox, QFileDialog, QPushButton, QHBoxLayout, QTabWidget, QAction
 from backend.autocorrect import *
-from gui.base_table import BaseTable
+from gui.UI_backend.base_table import BaseTable
 from utils import resource_path
-from gui.table_widget import LabeledTableWidget
-from gui.add_object_dialog import AddObjectDialog, database_description
-from gui.edit_database_dialog import EditDialog
+from gui.UI_backend.table_widget import LabeledTableWidget
+from gui.Dialogs.add_object_dialog import database_description
 from database.database_directory import DatabaseDirectoryDialog
 from database.db_models import get_configured_db_path, get_db_path
-from backend.convertdwg import convertDWG_DXF, convertDXF_DWG
-from gui.set_output_file_type import SetOutputFileType
+from backend.convertdwg import convertDWG_DXF
 from backend.output_filepaths import dwg_output
-from gui.edit_tolerance_dialog import edit_tolerences
-from gui.edit_boundary_dialog import edit_boundary
+from gui.UI_backend.ui_helpers import create_buttons
+from gui.Dialogs.Dialog_calls import _open_add_object_dialog, _open_edit_dialog, _open_directory_dialog, _open_output_type_dialog, _open_tolerance_dialog, _open_boundary_dialog
+from gui.UI_backend.ui_updates import set_correct_tab_colour, _update_status, populate_results_table
+
 
 class MyWindow(QMainWindow):
     def __init__(self):
@@ -69,10 +68,10 @@ class MyWindow(QMainWindow):
         purple_vbox.setAlignment(Qt.AlignTop)
         purple_vbox.setSpacing(7)
         purple_vbox.setContentsMargins(0, 0, 20, 0)
-        self.Button4 = self.create_buttons('Edit Object Database',        lambda: self._open_edit_dialog('object'),   purple_vbox, purple_style)
-        self.Button5 = self.create_buttons('Edit Line Category Database', lambda: self._open_edit_dialog('category'), purple_vbox, purple_style)
-        self.Button6 = self.create_buttons('Set Database Directory', self._open_directory_dialog, purple_vbox, purple_style)
-        self.Button7 = self.create_buttons('Database Description', lambda: database_description(parent=self).exec_(), purple_vbox, purple_style)
+        self.Button4 = create_buttons('Edit Object Database',        lambda: _open_edit_dialog(self, 'object'),   purple_vbox, purple_style)
+        self.Button5 = create_buttons('Edit Line Category Database', lambda: _open_edit_dialog(self, 'category'), purple_vbox, purple_style)
+        self.Button6 = create_buttons('Set Database Directory', lambda: _open_directory_dialog(self), purple_vbox, purple_style)
+        self.Button7 = create_buttons('Database Description', lambda: database_description(parent=self).exec_(), purple_vbox, purple_style)
         purple_hbox.addLayout(purple_vbox)
         self.tab1_grid.addLayout(purple_hbox, 1, 0, 1, 3)
         
@@ -81,14 +80,14 @@ class MyWindow(QMainWindow):
         vbox_t = QVBoxLayout()
         hbox1 = QHBoxLayout()
         hbox1.addStretch()
-        self.Button1 = self.create_buttons('Import DXF File', self.import_dxf_file, hbox1, "QPushButton {background-color: #0000FF; color: white;} QPushButton:hover{background-color: #00008B;}")
+        self.Button1 = create_buttons('Import DXF File', self.import_dxf_file, hbox1, "QPushButton {background-color: #0000FF; color: white;} QPushButton:hover{background-color: #00008B;}")
         hbox1.addSpacing(100)
-        self.Button2 = self.create_buttons('View Issues', self.fix_errors, hbox1, "QPushButton {background-color: #0000FF; color: white;} QPushButton:hover{background-color: #00008B;}")
+        self.Button2 = create_buttons('View Issues', self.fix_errors, hbox1, "QPushButton {background-color: #0000FF; color: white;} QPushButton:hover{background-color: #00008B;}")
         hbox1.addStretch()
         vbox_t.addLayout(hbox1)
 
         hbox2 = QHBoxLayout()
-        self.Button3 = self.create_buttons('Reset App', self.reset_app, hbox2, "QPushButton {background-color: #0000FF; color: white;} QPushButton:hover{background-color: #00008B;}")
+        self.Button3 = create_buttons('Reset App', self.reset_app, hbox2, "QPushButton {background-color: #0000FF; color: white;} QPushButton:hover{background-color: #00008B;}")
         vbox_t.addLayout(hbox2)
         # vbox_t.setContentsMargins(0, 0, 310, 0)
 
@@ -126,7 +125,7 @@ class MyWindow(QMainWindow):
         self.tab1.setLayout(self.tab1_grid)
         self.tabs.addTab(self.tab1, "Import")
 
-        self.set_correct_tab_colour(self.tab1)
+        set_correct_tab_colour(self, self.tab1)
 
 
         menubar = self.menuBar()
@@ -138,56 +137,23 @@ class MyWindow(QMainWindow):
                 color: white;}QMenuBar::item:selected {
                 background-color: #333333;}""")
         
-        self.tabs.setStyleSheet("""
-        QTabBar {
-            background-color: black;
-        }
-        QTabBar::tab {
-            background-color: #cccccc;
-            color: black;
-            padding: 4px 10px;
-        }
-        QTabBar::tab:selected {
-            background-color: white;
-            color: black;
-        }
-        QTabWidget::pane {
-            background-color: white;
-        }
-    """)
+        self.tabs.setStyleSheet("""QTabBar {background-color: black;}
+                                QTabBar::tab {background-color: #cccccc;color: black;padding: 4px 10px;}
+        QTabBar::tab:selected { background-color: white;color: black;}
+        QTabWidget::pane {background-color: white;}""")
 
         output_action = QAction('Set Output File Type', self)
-        output_action.triggered.connect(self._open_output_type_dialog)
+        output_action.triggered.connect(lambda: _open_output_type_dialog(self))
         menubar.addAction(output_action)
 
         tolerance_action = QAction('Adjust Tolerances', self)
-        tolerance_action.triggered.connect(self._open_tolerance_dialog)
+        tolerance_action.triggered.connect(lambda: _open_tolerance_dialog(self))
         menubar.addAction(tolerance_action)
 
         set_boundary_action = QAction('Set Boundary', self)
-        set_boundary_action.triggered.connect(self._open_boundary_dialog)
+        set_boundary_action.triggered.connect(lambda: _open_boundary_dialog(self))
         menubar.addAction(set_boundary_action)
 
-
-    def create_buttons(self, Text, command, box: QHBoxLayout, Colour): 
-        Button = QPushButton()
-        Button.setText(Text)
-        Button.clicked.connect(command)
-        box.addWidget(Button)
-        Button.setStyleSheet(Colour)
-        Button.setMaximumWidth(221)
-        Button.setMinimumWidth(220)
-        Button.setMinimumHeight(25)
-        return Button 
-    
-    def placeholder(self): 
-        return 
-    
-    def create_vbox(self, table, labelname):
-        vbox = QVBoxLayout()
-        vbox.addWidget(QLabel(labelname))
-        vbox.addWidget(table, 1)
-        return vbox 
         
     def create_results_tab(self): 
         tab2 = QWidget()
@@ -224,12 +190,10 @@ class MyWindow(QMainWindow):
         
         self.tabs.addTab(tab2, "Results") #add tab 2 to the widget
         
-        self.populate_results_table()
+        populate_results_table(self)
 
         #OCD, setting each tab to a specific colour of white 
-        self.set_correct_tab_colour(tab2)
-        
-        # self.tabs.setCurrentIndex(1) # swapping to results tab
+        set_correct_tab_colour(self, tab2)
 
     def results_fixation(self): 
         tab3 = QWidget()
@@ -277,7 +241,7 @@ class MyWindow(QMainWindow):
             grid.addLayout(vbox5, 2, 0, 1, 2)
             self.tabledup.populate(self.line_duplicate_points)    
 
-        self.set_correct_tab_colour(tab3)
+        set_correct_tab_colour(self, tab3)
         tab3.setLayout(grid)
         self.tabs.addTab(tab3, "Error Fixation") 
 
@@ -367,36 +331,18 @@ class MyWindow(QMainWindow):
             unique_names = [n for n in combined if not (n in seen or seen.add(n))]
 
             add_btn = QPushButton('Add Missing Objects to Database')
-            add_btn.clicked.connect(lambda: self._open_add_object_dialog(unique_names))
+            # add_btn.clicked.connect(lambda: self._open_add_object_dialog(unique_names))
+            add_btn.clicked.connect(lambda: _open_add_object_dialog(self, unique_names))
             vbox1.addWidget(add_btn, alignment=Qt.AlignLeft)
 
         tab4.setLayout(grid)
-        self.set_correct_tab_colour(tab4)
+        set_correct_tab_colour(self, tab4)
         self.tabs.addTab(tab4, "Database Results")
-
-
-
+        
 
     check = "\u2705"      # ✅
     cross = "\u274C"      # ❌
     warning = "\u26A0"    # ⚠
-
-    def set_correct_tab_colour(self, tab): 
-        tab.setAutoFillBackground(True)
-        palette = tab.palette()
-        palette.setColor(palette.Window, QtGui.QColor('white'))
-        tab.setPalette(palette)
-
-    def _open_add_object_dialog(self, names):
-        dlg = AddObjectDialog(names, parent=self)
-        dlg.accepted.connect(self.reload_file)
-        dlg.exec_()
-
-    def _open_description_dialog(self): 
-        dlg = database_description(parent=self)
-        dlg.exec_()
-
-
 
     def results_summary(self): 
         godvbox1 = QVBoxLayout()
@@ -580,7 +526,6 @@ class MyWindow(QMainWindow):
                 vbox2.addWidget(dataerror2)
         
             hboxdata.addLayout(vboxdata2)
-            vbox2.addLayout(hboxdata)   
 
         container_geo = QWidget()
         container_geo.setObjectName("summary_container")
@@ -594,11 +539,8 @@ class MyWindow(QMainWindow):
         container2.setObjectName("summary_container")
         container2.setStyleSheet("#summary_container { border: 1px solid black; border-radius: 5px; }")
       
-
         container_geo.setLayout(vbox1)
-        container_cat.setLayout(vbox2)    
-        godvbox2.addLayout(vbox1)
-        godvbox2.addLayout(vbox2)
+        container_cat.setLayout(vbox2)
 
         #setting the boxses
         container2.setLayout(godvbox2)
@@ -606,12 +548,9 @@ class MyWindow(QMainWindow):
         godvbox2.addWidget(container_geo)
         godvbox2.addWidget(container_cat)
 
-
         grid.addLayout(godvbox1, 0, 0)  
         grid.addWidget(container2, 1, 0)
-        # grid.addLayout(godvbox2, 1, 0)
         tab5.setLayout(grid)
-        # self.tabs.addTab(tab5, "Results Summary")
 
         # Clear any previous layout on the container
         if self.summary_container.layout():
@@ -620,19 +559,11 @@ class MyWindow(QMainWindow):
         self.summary_container.setLayout(godvbox2)
         self.summary_container.setVisible(True)  
 
-
         if len(self.blockname_unmatched) > 0 or len(self.linename_unmatched) > 0:
             combined = self.blockname_unmatched + self.linename_unmatched
             seen = set()
             unique_names = [n for n in combined if not (n in seen or seen.add(n))]
-            self._open_add_object_dialog(unique_names)
-
-    def populate_results_table(self): 
-        #populate the results table  
-        self.table1.populate(self.on_line_points)
-        self.table2.populate(self.wall_slope_intercept)
-        self.table3.populate(self.all_lines_table)
-        self.table4.populate(self.filtered_walls)      
+            _open_add_object_dialog(self, unique_names)
    
     def _update_status(self, app_state=None, reset=False):
         """Function that resets teh status label based on weather there is a file imported"""
@@ -661,7 +592,7 @@ class MyWindow(QMainWindow):
             )
 
     def import_dxf_file(self):
-        self._update_status('No File Loaded', False)
+        _update_status(self, 'No File Loaded', False)
         self.summary_container.setVisible(False)
         self.delete_temp_folder()
 
@@ -691,47 +622,10 @@ class MyWindow(QMainWindow):
             self._run_analysis(self.dwg_conv_dxf_filepath, filepath)
             self.imported_dwg = True 
 
-        return filepath
-
-    #reloading a file is a change to the interface is made 
-    def _open_edit_dialog(self, mode):
-        EditDialog(mode=mode, parent=self).exec_()
-        if self.original_filepath:
-            self.reload_file()
-
-    def _open_directory_dialog(self):
-        dialog = DatabaseDirectoryDialog(parent=self)
-        dialog.exec_()
-        self.update_status_location()
-
-    def _open_output_type_dialog(self):
-        """Finds out what the selected output path is by the user """
-        dialog = SetOutputFileType(current_type=self.output_file_type, parent=self)
-        if dialog.exec_() == SetOutputFileType.Accepted:
-            self.output_file_type = dialog.collectResult()
-            self._update_status()
-            if self.original_filepath is None: 
-                return
-            if self.original_filepath is not None: 
-                self.reload_file()
-
-
-    def _open_tolerance_dialog(self):
-        dialog = edit_tolerences(parent=self)
-        if dialog.exec_() == edit_tolerences.Accepted:
-            if self.original_filepath:
-                self.reload_file()
-
-    def _open_boundary_dialog(self):
-        dialog = edit_boundary(parent=self)     
-        if dialog.exec_() == edit_boundary.Accepted:
-            if self.original_filepath:
-                self.reload_file()         
-            
-      
+        return filepath    
 
     def update_status_location(self):
-        self._update_status('File Loaded ✅' if self.original_filepath else 'No File Loaded', False)
+        _update_status(self, 'File Loaded ✅' if self.original_filepath else 'No File Loaded', False)
 
     def reload_file(self):
         if getattr(self, 'imported_dwg', False):
@@ -760,18 +654,30 @@ class MyWindow(QMainWindow):
             self.original_filepath = None
             return
 
+        _update_status(self, 'File Loaded ✅', False)
+
+        self.on_line_points        = result.on_line_points
+        self.all_lines_table       = result.all_lines_table
+        self.wall_slope_intercept  = result.wall_slope_intercept
+        self.filtered_walls        = result.filtered_walls
+        self.mistake_points        = result.mistake_points
+        self.corrected_blocks      = result.corrected_blocks
+        self.line_mistakes         = result.line_mistakes
+        self.line_duplicate_points = result.line_duplicates
+        self.post_accepted_blocks  = result.post_accepted_blocks
+        self.post_accepted_lines   = result.post_accepted_lines
+        self.post_rejected_blocks  = result.post_rejected_blocks
+        self.post_rejected_lines   = result.post_rejected_lines
+        self.line_name             = result.line_name
+        self.all_fail              = result.all_fail
+        self.bed_check             = result.bedit_check
+        self.fixed_lines           = result.fixed_lines
+        self.bedit_mistake_points  = result.bedit_mistake_points
+        self.bedit_corrected_blocks = result.bedit_corrected_blocks
+        self.blockname_unmatched   = result.blockname_unmatched
+        self.linename_unmatched    = result.linename_unmatched
+
         
-        self._update_status('File Loaded ✅', False)
-
-        (_, self.on_line_points, self.all_lines_table, 
-            self.wall_slope_intercept, self.filtered_walls, self.mistake_points, 
-            self.corrected_blocks, self.line_mistakes, _, 
-            self.line_duplicate_points, self.post_accepted_blocks, self.post_accepted_lines, 
-            self.post_rejected_blocks, self.post_rejected_lines, self.line_name, self.all_fail, _,
-            self.bed_check, self.fixed_lines, _, _, 
-            self.bedit_mistake_points, self.bedit_corrected_blocks,
-            _, _, self.blockname_unmatched, self.linename_unmatched) = result 
-
         if len(self.on_line_points) > 0 or len(self.wall_slope_intercept) > 0 or len(self.all_fail) > 0 or len(self.filtered_walls) > 0: 
             self.create_results_tab()
 
@@ -814,20 +720,16 @@ class MyWindow(QMainWindow):
                     None, "View DXF File Issues",
                     self.original_filepath.replace('.dxf', '_potential_issues.dxf'),
                     "DXF Files (*.dxf)")
-                
-                
-                # NEW FUNCTION - modifies file in place
+
+                if not output_filepath:
+                    return
+
                 update_dxf_in_place(self.original_filepath, output_filepath)
                 QMessageBox.information(None, "Success", f"Potential mistakes saved to:\n{output_filepath}")
-                    
-                # except Exception as e:
-                #     QMessageBox.critical(None, "Error", f"Failed to create file:\n{str(e)}")
 
             if self.output_file_type == 'DWG': 
                 #call function to output dwg 
                 dwg_output(self.original_filepath, self.original_filepath, None, self.oda_dir, 'DWG')
-
-        
 
     def reset_app(self):
         self.original_filepath = None
@@ -837,7 +739,7 @@ class MyWindow(QMainWindow):
             self.tabs.removeTab(1)
 
         import os
-        self._update_status('No File Loaded', True)
+        _update_status(self, 'No File Loaded', True)
 
         self.summary_container.setVisible(False)
 

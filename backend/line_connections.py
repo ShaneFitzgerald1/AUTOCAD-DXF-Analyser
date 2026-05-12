@@ -1,8 +1,3 @@
-import math 
-from collections import defaultdict
-from backend.mathematical import Mathematical
-
-
 class line_connections: 
     """This class sorts the lines by what connections they have 
     line_line_block_connections: Main function that returns lines that start and end on blocks, combines everything
@@ -16,6 +11,7 @@ class line_connections:
 
     block_tolerences: if lines start and end on the outskirts of a shape this is acceptable, this function sees where a shape starts and ends based on its name
     """
+
     def link_line_block_connections(self, correct_lines, fixed_lines, line_mistakes, blockrefs): 
         """ This function checks to see if lines start and end on block references """
 
@@ -45,7 +41,13 @@ class line_connections:
 
 
         for line in lines: 
-            name, x_start, y_start, x_end, y_end, offset, line_ref = line 
+            name = line.name
+            x_start = line.x_start 
+            y_start = line.y_start
+            x_end = line.x_end
+            y_end = line.y_end
+            line_ref = line.lineref
+            # name, x_start, y_start, x_end, y_end, offset, line_ref = line 
             block_name_start = None 
             block_name_end = None  
          

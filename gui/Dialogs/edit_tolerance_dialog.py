@@ -1,13 +1,13 @@
 from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QListWidget, QPushButton, QTabWidget, QWidget, QScrollArea, QLineEdit, QCheckBox, QSizePolicy
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
-from gui.BaseDialog import BaseDialog
+from gui.Dialogs.BaseDialog import BaseDialog
 from database.db_models import Session, ObjectID
 from database.db_objects import get_catalogue, get_category_catalogue
-from gui.table_widget import LabeledTableWidget
-from gui.base_table import BaseTable
-from gui.add_object_dialog import Combox
-from gui.edit_database_dialog import EditDialog
+from gui.UI_backend.table_widget import LabeledTableWidget
+from gui.UI_backend.base_table import BaseTable
+from gui.Dialogs.add_object_dialog import Combox
+from gui.Dialogs.edit_database_dialog import EditDialog
 from database.tolerance_config import (
     save_tolerance_set, get_active_set_name, get_all_tolerance_sets, get_all_tolerance_sets_full,
     delete_tolerance_set, _read_tolerances, _write_tolerances, set_active_tolerance_set,

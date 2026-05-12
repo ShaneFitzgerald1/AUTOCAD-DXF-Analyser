@@ -1,13 +1,5 @@
 import ezdxf
 from ezdxf.lldxf import const
-import subprocess
-import os
-import numpy as np
-import pandas as pd
-import math
-from itertools import combinations
-from sympy import symbols, Matrix, Eq, solve
-from dataclasses import dataclass
 from backend.mathematical import Mathematical
 from backend.guipresentation import presentation
 from backend.datafiltration import datafiltration
@@ -15,6 +7,10 @@ from backend.line_connections import line_connections
 from backend.autocad_file_presentation import file_presentation
 from database.db_objects import object_db_results, validate_categories, dxf_mistake_block_explained, dxf_mistake_line_explained
 from database.tolerance_config import extract_values_from_tolerance_sets, extract_boundary_values
+
+from backend.dataclasses.block_ref_data import BlockRef
+from backend.dataclasses.line_data import Lines
+from backend.dataclasses.autocadres import AnalysisResult
 
 maths = Mathematical()
 pres = presentation() 
@@ -32,7 +28,6 @@ def autocad_points(filepath):
     msp = doc.modelspace()
     
     block_length = []
-    blocks = []
     Blockref_Points = []
     all_lines = []
     all_walls = []  
@@ -118,7 +113,7 @@ def autocad_points(filepath):
                     if new_name == name:
                         name_error = None
                     insert_refs.append(entity)  
-                    Blockref_Points.append([new_name, x_final, y_final, angle, name, entity])
+                    Blockref_Points.append(BlockRef(name=new_name, x=x_final, y=y_final, angle=angle, name_error=name, blockref=entity))
 
 
                 elif entity.dxftype() == 'LINE':
@@ -128,7 +123,7 @@ def autocad_points(filepath):
                     end_x = round(x + entity.dxf.end.x, 2)
                     end_y = round(y + entity.dxf.end.y, 2)
                     layers.append([layer])
-                    all_lines.append([layer, start_x, start_y, end_x, end_y, True, entity])
+                    all_lines.append(Lines(name=layer, x_start=start_x, y_start=start_y, x_end=end_x, y_end=end_y, offset=True, lineref=entity))
 
                 elif entity.dxftype() == 'LWPOLYLINE':
                     if entity.dxf.layer == 'CHANNEL OUTLINE':   # add layer filter
@@ -141,7 +136,6 @@ def autocad_points(filepath):
                         ]
                         if offset_points:   # only append if not empty
                             all_walls.append(offset_points)
-
 
         else: 
             insert_refs.append(insert)
@@ -166,9 +160,9 @@ def autocad_points(filepath):
                     attrib_data[attrib.dxf.tag] = attrib.dxf.text 
                 
             if offset_found: 
-                Blockref_Points.append([new_name, x_final, y_final, angle, name, insert])
+                Blockref_Points.append(BlockRef(name=new_name, x=x_final, y=y_final, angle=angle, name_error=name, blockref=insert))
             else:     
-                Blockref_Points.append([name, x, y, angle, name_error, insert])  
+                Blockref_Points.append(BlockRef(name=name, x=x, y=y, angle=angle, name_error=name_error, blockref=insert))
         
     if bedit_check != 1: 
         for line in msp.query('LINE'):
@@ -179,7 +173,7 @@ def autocad_points(filepath):
             end_x = round(line.dxf.end.x, 2)
             end_y = round(line.dxf.end.y, 2)
             layers.append([layer])
-            all_lines.append([layer, start_x, start_y, end_x, end_y, False, line])    
+            all_lines.append(Lines(name=layer, x_start=start_x, y_start=start_y, x_end=end_x, y_end=end_y, offset=False, lineref=line))   
 
         # Extract POLYLINE data 
         for polyline in msp.query('LWPOLYLINE[layer=="CHANNEL OUTLINE"]'):
@@ -212,7 +206,7 @@ def autocad_points(filepath):
          line_line_connections) = filter.find_line_error(filtered_lines, all_walls, line_properties, wall_slopes, wall_intercepts, line_tolerance1, 25, line_tolerance2)
         fixed_lines, line_mistake_exp = filter.fix_line_mistakes(line_mistakes)
         bedit_lines= filter.filter_offset_lines(correct_lines, line_mistakes)
-        line_duplicates = filter.flag_duplicate_lines(all_lines)
+        line_duplicates = filter.flag_duplicate_lines(filtered_lines)
 
         #Gui 
         wall_slope_intercept = pres.combine_slope_walls(wall_lengths, slopes, y_intercepts) #for presentation in gui table 
@@ -220,7 +214,7 @@ def autocad_points(filepath):
         #Database 
         (post_accepted_blocks, post_accepted_lines,
         post_rejected_block, post_rejected_lines,
-        blockname_unmatched, linename_unmatched) = object_db_results(fixed_all_blocks, filtered_blockref, all_lines, correct_lines, fixed_lines, wall_slopes, wall_intercepts, all_walls)
+        blockname_unmatched, linename_unmatched) = object_db_results(fixed_all_blocks, filtered_blockref, correct_lines, fixed_lines, wall_slopes, wall_intercepts, all_walls)
         line_block_connections = l_conn.link_line_block_connections(correct_lines, fixed_lines, line_mistakes, fixed_all_blocks)
         l_l_connections = l_conn.sort_line_block_line_conns(line_block_connections, line_line_connections)
         line_name, all_fail = validate_categories(l_l_connections, line_block_connections)
@@ -229,13 +223,18 @@ def autocad_points(filepath):
         mistake_block_reason = dxf_mistake_block_explained(mistake_exp)
         mistake_line_reason = dxf_mistake_line_explained(line_mistake_exp)
  
-        return (doc, on_line_points, all_lines_table, 
-            wall_slope_intercept, filtered_walls, mistake_points, 
-            final_corrected_blocks, line_mistakes, bedit_lines, 
-            line_duplicates, post_accepted_blocks, post_accepted_lines, 
-            post_rejected_block, post_rejected_lines, line_name, all_fail, 
-            blocks_fil, bedit_check, fixed_lines, all_walls, wall_point_refs, bedit_mistake_points, bedit_corrected_blocks,
-            mistake_block_reason, mistake_line_reason, blockname_unmatched, linename_unmatched)
+
+        return AnalysisResult(doc=doc, on_line_points=on_line_points, all_lines_table=all_lines_table,
+            wall_slope_intercept=wall_slope_intercept, filtered_walls=filtered_walls, mistake_points=mistake_points,
+            corrected_blocks=final_corrected_blocks, line_mistakes=line_mistakes, bedit_lines=bedit_lines,
+            line_duplicates=line_duplicates, post_accepted_blocks=post_accepted_blocks, post_accepted_lines=post_accepted_lines,
+            post_rejected_blocks=post_rejected_block, post_rejected_lines=post_rejected_lines, line_name=line_name,
+            all_fail=all_fail, blocks_fil=blocks_fil, bedit_check=bedit_check, fixed_lines=fixed_lines,
+            all_walls=all_walls, wall_point_refs=wall_point_refs, bedit_mistake_points=bedit_mistake_points,
+            bedit_corrected_blocks=bedit_corrected_blocks, mistake_block_reason=mistake_block_reason,
+            mistake_line_reason=mistake_line_reason, blockname_unmatched=blockname_unmatched, linename_unmatched=linename_unmatched,
+        )
+
     
 def extract_polyline_points(polyline): #Convert wall points into x and y points 
         if polyline.dxftype() == 'LWPOLYLINE':
@@ -250,16 +249,25 @@ def update_dxf_in_place(filepath, output_filepath):
     """This function updates the dxf file, function updates Block reference and line positions based on corrections
     Red box is drawn around Block reference mistakes and a Red circle is drawn around line mistakes. """
 
-    (doc, _, _, _, _, _, corrected_blocks, _, bedit_lines,  
-        duplicate_lines, _, _, post_rejected_block, 
-        post_rejected_line, _, all_fail, blocks_fil, _, _, all_walls, wall_point_refs, _, _,
-        mistake_block_reason, mistake_line_reasons, _, _) = autocad_points(filepath)
+    # (doc, _, _, _, _, _, corrected_blocks, _, bedit_lines,  
+    #     duplicate_lines, _, _, post_rejected_block, 
+    #     post_rejected_line, _, all_fail, blocks_fil, _, _, all_walls, wall_point_refs, _, _,
+    #     mistake_block_reason, mistake_line_reasons, _, _) = autocad_points(filepath)
     
+    result = autocad_points(filepath)
 
-    # (doc, corrected_blocks, bedit_lines,  
-    #     duplicate_lines, post_rejected_block, 
-    #     post_rejected_line, all_fail, blocks_fil, all_walls, wall_point_refs,
-    #     mistake_block_reason, mistake_line_reasons) = autocad_points(filepath)
+    doc = result.doc 
+    corrected_blocks = result.corrected_blocks 
+    bedit_lines = result.bedit_lines 
+    duplicate_lines = result.line_duplicates
+    post_rejected_block = result.post_rejected_blocks
+    post_rejected_line = result.post_rejected_lines 
+    all_fail = result.all_fail
+    blocks_fil = result.blocks_fil
+    all_walls = result.all_walls 
+    wall_point_refs = result.wall_point_refs 
+    mistake_block_reason = result.mistake_block_reason
+    mistake_line_reasons = result.mistake_line_reason
     
     msp = doc.modelspace()
 

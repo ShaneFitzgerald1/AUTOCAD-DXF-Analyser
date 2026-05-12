@@ -1,4 +1,3 @@
-
 from ezdxf.lldxf import const
 import math
 from itertools import combinations

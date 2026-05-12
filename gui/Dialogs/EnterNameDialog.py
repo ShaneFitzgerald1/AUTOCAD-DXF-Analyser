@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import (
     QLineEdit
 )
-from gui.BaseDialog import BaseDialog
+from gui.Dialogs.BaseDialog import BaseDialog
 from PyQt5.QtCore import Qt, pyqtSignal
 
 class EnterNameDialog(BaseDialog):

@@ -1,8 +1,8 @@
 from PyQt5.QtWidgets import QVBoxLayout, QLabel, QWidget, QTabWidget
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
-from gui.BaseDialog import BaseDialog
-from gui.add_object_dialog import Combox
+from gui.Dialogs.BaseDialog import BaseDialog
+from gui.Dialogs.add_object_dialog import Combox
 
 
 class SetOutputFileType(BaseDialog):

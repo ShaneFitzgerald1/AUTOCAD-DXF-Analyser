@@ -1,5 +1,4 @@
 import os
-import sys
 
 def reset_database():
     # Delete user db

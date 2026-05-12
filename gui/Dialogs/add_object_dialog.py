@@ -1,11 +1,11 @@
 from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QListWidget, QPushButton, QTabWidget, QWidget, QScrollArea, QLineEdit
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
-from gui.BaseDialog import BaseDialog
+from gui.Dialogs.BaseDialog import BaseDialog
 from database.db_models import Session, ObjectID
 from database.db_objects import get_catalogue, get_category_catalogue
-from gui.table_widget import LabeledTableWidget
-from gui.base_table import BaseTable
+from gui.UI_backend.table_widget import LabeledTableWidget
+from gui.UI_backend.base_table import BaseTable
 
 
 class AddObjectDialog(BaseDialog):

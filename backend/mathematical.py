@@ -1,6 +1,5 @@
 import math
 
-
 class Mathematical:
     """This class does the backend maths calculations for the interface and updated dxf 
        This class contains six functison 
@@ -15,9 +14,8 @@ class Mathematical:
     def wall_len(all_lines):
         wall_lengths = []
         for line in all_lines:
-            name, x_start, y_start, x_end, y_end, offset, line_ref = line
-            delta_x = x_start - x_end
-            delta_y = y_start - y_end
+            delta_x = line.x_start - line.x_end
+            delta_y = line.y_start - line.y_end
             distance = math.sqrt((delta_x)**2 + (delta_y)**2)
             round_distance = round(distance, 2)
             wall_lengths.append(round_distance)
@@ -36,11 +34,10 @@ class Mathematical:
         wall_intercepts = []
 
         for line in all_lines: 
-            line_name, x_start, y_start, x_end, y_end, mistake, line_ref = line  
-            line_slopes, line_intercepts = Mathematical.calc_slope(x_start, y_start, x_end, y_end)
+            line_slopes, line_intercepts = Mathematical.calc_slope(line.x_start, line.y_start, line.x_end, line.y_end)
             slopes.append(line_slopes)
             y_intercepts.append(line_intercepts)
-            line_properties.append([line_name, line_slopes, line_intercepts, x_start, y_start, x_end, y_end])
+            line_properties.append([line.name, line_slopes, line_intercepts, line.x_start, line.y_start, line.x_end, line.y_end])
                     
         # for walls in all_walls:  
         for i in range(len(all_walls)):  
@@ -85,18 +82,25 @@ class Mathematical:
         #This function Filters the Block References and Points to ensure any unwanted Points are not picked up
         filtered_blockref = []
 
-        for block in Blockref_Points:
-            name, x, y, angle, name_error, block_ref = block
+        # for block in Blockref_Points:
+        #     name, x, y, angle, name_error, block_ref = block
 
-            if x_min <= x <= x_max and y_min <= y <= y_max:
-                filtered_blockref.append([name, x, y, angle, name_error, block_ref])
+        #     if x_min <= x <= x_max and y_min <= y <= y_max:
+        #         filtered_blockref.append([name, x, y, angle, name_error, block_ref])
+
+
+        for block in Blockref_Points:
+            if x_min <= block.x <= x_max and y_min <= block.y <= y_max:
+                filtered_blockref.append(block)  # same object, just kept or dropped
+
 
         all_x = []
         all_y = []
 
-        for _, x, y, _, _, _ in filtered_blockref:
-            all_x.append(x)
-            all_y.append(y)
+        for block in filtered_blockref:
+            all_x.append(block.x)
+            all_y.append(block.y)
+    
 
         filtered_walls = []
         for wall in all_walls:
@@ -115,9 +119,10 @@ class Mathematical:
     def filter_lines(lines, x_min, x_max, y_min, y_max): 
         filtered_lines = []
         for line in lines: 
-            name, x_start, y_start, x_end, y_end, offset, line_ref = line   
-            if x_min <= x_start <= x_max and x_min <= x_end <= x_max and y_min <= y_start <= y_max and y_min <= y_end <= y_max: 
-                filtered_lines.append([name, x_start, y_start, x_end, y_end, offset, line_ref]) 
+            # name, x_start, y_start, x_end, y_end, offset, line_ref = line  
+
+            if x_min <= line.x_start <= x_max and x_min <= line.x_end <= x_max and y_min <= line.y_start <= y_max and y_min <= line.y_end <= y_max: 
+                filtered_lines.append(line) 
 
         return filtered_lines         
 
@@ -180,7 +185,13 @@ class Mathematical:
         lines_cl = []
 
         for line in lines: 
-            name, x_start, y_start, x_end, y_end, offset, line_ref = line
+            #Set variables from dataclass 
+            name = line.name 
+            x_start = line.x_start 
+            y_start = line.y_start 
+            x_end = line.x_end
+            y_end = line.y_end 
+            line_ref = line.lineref
 
             min_x = min(x for wall in all_walls for x, y in wall) #finding the boundaries of the shape 
             min_y = min(y for wall in all_walls for x,y in wall)
@@ -190,7 +201,7 @@ class Mathematical:
             # Check boundaries ONCE (no loop needed)
             if (x_start < (min_x - 1) or x_start > (max_x + 1) or y_start < (min_y- 1) or y_start > (max_y + 1) or
                 x_end < (min_x - 1) or x_end > (max_x + 1) or y_end < (min_y - 1) or y_end > (max_y + 1)):
-                lines_not_OCO.append([name, x_start, y_start, x_end, y_end, offset, line_ref])
+                lines_not_OCO.append(line)
                 lines_cl.append([name, x_start, y_start, x_end, y_end, 'No', line_ref])
                 continue
             on_channel_outline = False 
@@ -216,10 +227,10 @@ class Mathematical:
                         break
 
             if on_channel_outline:
-                lines_OCO.append([name, x_start, y_start, x_end, y_end, offset, line_ref])
+                lines_OCO.append(line)
                 lines_cl.append([name, x_start, y_start, x_end, y_end, 'Yes', line_ref])
             else:
-                lines_not_OCO.append([name, x_start, y_start, x_end, y_end, offset, line_ref])
+                lines_not_OCO.append(line)
                 lines_cl.append([name, x_start, y_start, x_end, y_end, 'No', line_ref])  
 
         return lines_OCO, lines_not_OCO, lines_cl              

@@ -3,9 +3,9 @@ import os
 from PyQt5.QtWidgets import QVBoxLayout, QLabel, QPushButton, QFileDialog, QMessageBox, QWidget, QTabWidget
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
-from gui.BaseDialog import BaseDialog
+from gui.Dialogs.BaseDialog import BaseDialog
 from database.db_models import get_configured_db_path, reinitialise_db
-from gui.add_object_dialog import database_description
+from gui.Dialogs.add_object_dialog import database_description
 
 
 SHARED_DB_PATH = r'S:\General\Shane\objectdatabase.db'

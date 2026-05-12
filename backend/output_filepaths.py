@@ -1,7 +1,7 @@
-import sys, tempfile, shutil, os 
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QGridLayout, QTableWidget, QLabel, QSizePolicy, QHeaderView, QMessageBox, QFileDialog, QTableWidgetItem, QPushButton, QHBoxLayout, QTabWidget
+import tempfile, shutil, os 
+from PyQt5.QtWidgets import QMessageBox, QFileDialog
 from backend.autocorrect import update_dxf_in_place
-from backend.convertdwg import convertDWG_DXF, convertDXF_DWG
+from backend.convertdwg import convertDXF_DWG
 
 
 

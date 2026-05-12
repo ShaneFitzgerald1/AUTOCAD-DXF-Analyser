@@ -32,14 +32,12 @@ class presentation:
                 on_line_points.append([name, x, y, angle, wall, wall_type, on_line, mistake, 'No'])
 
         for line in all_lines:
-            name, x_start, y_start, x_end, y_end, offset, line_ref = line
-
-            if any(abs(x_start - wall_x) <= tolerance for wall_x in wall_x_coords):  # Check if line is on a vertical wall (x_start == x_end and that x is a wall x)
-                    all_lines_table.append([name, x_start, y_start, x_end, y_end, 'Yes'])
-            elif any(abs(y_start - wall_y) <= tolerance for wall_y in wall_y_coords):
-                all_lines_table.append([name, x_start, y_start, x_end, y_end, 'Yes'])
+            if any(abs(line.x_start - wall_x) <= tolerance for wall_x in wall_x_coords):  # Check if line is on a vertical wall (x_start == x_end and that x is a wall x)
+                    all_lines_table.append([line.name, line.x_start, line.y_start, line.x_end, line.y_end, 'Yes'])
+            elif any(abs(line.y_start - wall_y) <= tolerance for wall_y in wall_y_coords):
+                all_lines_table.append([line.name, line.x_start, line.y_start, line.x_end, line.y_end, 'Yes'])
             else: 
-                all_lines_table.append([name, x_start, y_start, x_end, y_end, 'No'])  
+                all_lines_table.append([line.name, line.x_start, line.y_start, line.x_end, line.y_end, 'No'])  
 
         return on_line_points, all_lines_table
     

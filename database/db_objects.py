@@ -41,8 +41,6 @@ def explain_object_db(blockrefs, lines, actual_type, wall_slopes, wall_intercept
 
     _, _, lines_cl = maths.Chanel_check_line(wall_slopes, wall_intercepts, lines, all_walls)
 
-
-    # print(f'These are the ordered lines sit {ordered_refs}')
     objects = get_catalogue()
     accepted_block_names = []
     rejected_block_names = []
@@ -127,7 +125,7 @@ def explain_object_db(blockrefs, lines, actual_type, wall_slopes, wall_intercept
         return accepted_line_names, rejected_line_names, linename_unmatched
     
 
-def object_db_results(fixed_all_blocks, blockrefs, lines, correct_lines, fixed_lines, wall_slopes, wall_intercepts, all_walls):
+def object_db_results(fixed_all_blocks, blockrefs, correct_lines, fixed_lines, wall_slopes, wall_intercepts, all_walls):
         
     # correct_lines.extend(fixed_lines)
     all_correct_lines = correct_lines + fixed_lines
@@ -139,11 +137,12 @@ def object_db_results(fixed_all_blocks, blockrefs, lines, correct_lines, fixed_l
     # this would be a pointless rejection as we have already identified the issue, so we compare the blockname inside the bedit to the database 
     # i.e. we compare the actual block name to the database 
     for block in blockrefs: #sorting blockrefs 
-        name, x, y, angle, name_error, block_ref = block 
-        if name_error is not None: 
-            sort_blockrefs.append([name_error, x, y, angle, name])
+        # name, x, y, angle, name_error, block_ref = block 
+
+        if block.name_error is not None: 
+            sort_blockrefs.append([block.name_error, block.x, block.y, block.angle, block.name])
         else:
-            sort_blockrefs.append([name, x, y, angle, name_error])    
+            sort_blockrefs.append([block.name, block.x, block.y, block.angle, block.name_error])    
 
     #All accepted and rejected blocks post check, if an error arised here this is a big issue
     post_accepted_block, post_rejected_block, blockname_unmatched = explain_object_db(fixed_all_blocks, all_correct_lines, 'INSERT', wall_slopes, wall_intercepts, all_walls)

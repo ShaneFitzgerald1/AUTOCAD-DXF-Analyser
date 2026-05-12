@@ -1,9 +1,7 @@
-import math 
-from collections import defaultdict
+import math
 from backend.mathematical import Mathematical
-from database.db_objects import get_catalogue
-from database.tolerance_config import get_active_tolerances
-from database.tolerance_config import extract_values_from_tolerance_sets
+from backend.dataclasses.line_data import Lines
+
 
 maths = Mathematical
 class datafiltration: 
@@ -24,14 +22,12 @@ class datafiltration:
         line_duplicates = []
         
         for line in all_lines:
-            name, x_start, y_start, x_end, y_end, offset, line_ref = line
-            
             # Normalise direction so A->B and B->A are treated as the same line
-            coords = tuple(sorted([(x_start, y_start), (x_end, y_end)]))
-            key = (name, coords)
+            coords = tuple(sorted([(line.x_start, line.y_start), (line.x_end, line.y_end)]))
+            key = (line.name, coords)
             
             if key in seen:
-                line_duplicates.append([name, x_start, y_start, x_end, y_end, line_ref, f'{name} is a duplicate line'])
+                line_duplicates.append([line.name, line.x_start, line.y_start, line.x_end, line.y_end, line.lineref, f'{line.name} is a duplicate line'])
             else:
                 seen.append(key)
      
@@ -52,7 +48,12 @@ class datafiltration:
 
         # Use enumerate to get both index and block data
         for block in filtered_blockref:
-            name, x, y, angle, name_error, block_ref = block 
+            name = block.name 
+            x = block.x 
+            y = block.y 
+            angle = block.angle 
+            name_error = block.name_error
+            block_ref = block.blockref
          
             # Find the closest corner to this block
             closest_corner = None
@@ -222,7 +223,12 @@ class datafiltration:
         correct_lines.extend(lines_OCO)
   
         for line in lines_not_OCO:  #Each start and end ponit of the line are checked against the slope and intercepts of the checker lines 
-            name, x_start, y_start, x_end, y_end, offset, line_ref = line 
+            name = line.name 
+            x_start = line.x_start 
+            y_start = line.y_start 
+            x_end = line.x_end
+            y_end = line.y_end
+            line_ref = line.lineref 
 
             line_key = (name, tuple(sorted([(x_start, y_start), (x_end, y_end)])))
          
@@ -236,6 +242,8 @@ class datafiltration:
             min_end_dist = float('inf')
             temp_end_slope = None
             temp_end_intercept = None
+            temp_start_name_conn = None 
+            temp_end_name_conn = None 
 
             #find the slope of each line to compare to that of hte checker lines 
             line_slope, line_intercept = maths.calc_slope(x_start, y_start, x_end, y_end)
@@ -250,6 +258,7 @@ class datafiltration:
                 skip_start_line = False 
                 skip_end_line = False 
                 run_check = False 
+
                 #This part of the code ensures that colinear lines dont correct lines despite being far away, 
                 #If the slope and intercept of a line are the same, the code ensures they are near enough to eachtoher to be considered fixable by that lien 
                 # Its necessary to check the x and y for both start and end poitns giving four different situations. 
@@ -276,32 +285,20 @@ class datafiltration:
                 if not avoid_distance_lines_x or not avoid_distance_lines_y:  #if the line is not within the range of the line then check if it is within a tolerence, than skip that line
                     continue 
 
-                # Check start point and track closest - ONLY STORE TEMP VALUES
-                if not start_matches and not skip_start_line:
-                        start_dist = maths.find_distance_to_line(x_start, y_start, slope, intercept)
-                        if start_dist <= tolerance1: 
-                            start_matches = True
-                            start_line_name = line_name
-                        if start_dist < min_start_dist:
-                            min_start_dist = start_dist
-                            temp_start_slope = slope
-                            temp_start_intercept = intercept
-                            temp_start_name_conn = line_name 
-
-                # Check end point and track closest
-                if not end_matches and not skip_end_line:     
-                        end_dist = maths.find_distance_to_line(x_end, y_end, slope, intercept) 
-                        if end_dist <= tolerance1: 
-                            end_matches = True
-                            end_line_name = line_name
-                        if end_dist < min_end_dist:
-                            min_end_dist = end_dist
-                            temp_end_slope = slope
-                            temp_end_intercept = intercept    
-                            temp_end_name_conn = line_name   
+                (start_matches, min_start_dist, temp_start_slope,
+                temp_start_intercept, temp_start_name_conn) = datafiltration.sort_matches_errors(
+                    start_matches, skip_start_line, x_start, y_start,
+                    slope, intercept, tolerance1, line_name,
+                    min_start_dist, temp_start_slope, temp_start_intercept, temp_start_name_conn)
+                
+                (end_matches, min_end_dist, temp_end_slope,
+                temp_end_intercept, temp_end_name_conn) = datafiltration.sort_matches_errors(
+                    end_matches, skip_end_line, x_end, y_end,
+                    slope, intercept, tolerance1, line_name,
+                    min_end_dist, temp_end_slope, temp_end_intercept, temp_end_name_conn)
 
                 if start_matches and end_matches: #If a match is found break 
-                    break            
+                    break        
 
             #The below code takes the temp slopes and intercepts found in the above code, slopes and intercepts are split into different 
 
@@ -319,8 +316,8 @@ class datafiltration:
                 line_line_connections.append([name, start_line_name, end_line_name, x_start, y_start, x_end, y_end, line_ref])
 
                 #make sperate list for mistakes if name = name in function below than continue 
-            if start_matches and end_matches: 
-                correct_lines.append([name, x_start, y_start, x_end, y_end, offset, line_ref])
+            if start_matches and end_matches:
+                correct_lines.append(line)
                 line_mistakes_check.append([name, x_start, y_start, x_end, y_end, start_line_name, end_line_name])  
                 line_line_connections.append([name, start_line_name, end_line_name, x_start, y_start, x_end, y_end, line_ref])  
         
@@ -341,7 +338,46 @@ class datafiltration:
         elif min_distance > tolerance3: #Distance so big its probably not a mistake 
             matches = True 
 
-        return matches, closest_slope, closest_intercept, line_name    
+        return matches, closest_slope, closest_intercept, line_name  
+    
+
+    @staticmethod
+    def sort_matches_errors(matches, skip_line, x, y, slope, intercept, tolerance1, line_name,
+                            min_dist, temp_slope, temp_intercept, temp_name_conn):
+        if not matches and not skip_line:
+            dist = maths.find_distance_to_line(x, y, slope, intercept)
+            if dist <= tolerance1:
+                matches = True
+                temp_name_conn = line_name  # only set name on actual match
+
+            if dist < min_dist:
+                min_dist = dist
+                temp_slope = slope
+                temp_intercept = intercept
+                temp_name_conn = line_name
+
+        return matches, min_dist, temp_slope, temp_intercept, temp_name_conn
+
+
+    # @staticmethod
+    # def sort_matches_errors(matches, skip_line, x, y, slope, intercept, tolerance1, line_name):
+    #     min_dist = float('inf')
+    #     temp_slope = None
+    #     temp_intercept = None
+
+    #     if not matches and not skip_line:
+    #         dist = maths.find_distance_to_line(x, y, slope, intercept)
+    #         if dist <= tolerance1: 
+    #             matches = True
+            
+    #         if dist < min_dist:
+    #             min_dist = dist
+    #             temp_slope = slope
+    #             temp_intercept = intercept
+    #             temp_name_conn = line_name   
+                
+    #     return matches, line_name, min_dist, temp_slope, temp_intercept
+
 
     def skip_line_on_path(x, y, x_start_check, x_end_check, y_start_check, y_end_check, tolerance1):  
         skip_line = False 
@@ -362,6 +398,7 @@ class datafiltration:
            If both lines have slopes, functions are solved using simealtaneous equations 
            The function returns a list of fixed lines with their name, position, layer, and colour. """
         
+        
         fixed_lines = []
         line_mistake_explain = []
         
@@ -376,10 +413,10 @@ class datafiltration:
                 new_x_end = x_end
                 new_y_end = y_end
 
-                fixed_lines.append([name, new_x_start, new_y_start, new_x_end, new_y_end, False, line_ref]) #Append these results so they are no longer checked
+                fixed_lines.append(Lines(name=name, x_start=new_x_start, y_start=new_y_start, x_end=new_x_end, y_end=new_y_end, offset=False, lineref=line_ref)) 
                 continue
 
-            elif x_start == x_end:  # Vertical line
+            elif abs(x_start - x_end) < 0.1:  # Vertical line
 
                 if closest_start_slope is None: #This is unlikely scenario, if both lines are vertical, probably that line is offset so it gets snapped onto the vertical line closest to it. 
                     x_intercept_start = float(closest_start_intercept.split()[2])
@@ -423,7 +460,8 @@ class datafiltration:
                     if new_x_end is None: 
                         new_x_end, new_y_end = x_end, y_end
 
-            fixed_lines.append([name, new_x_start, new_y_start, new_x_end, new_y_end, False, line_ref])
+            fixed_lines.append(Lines(name=name, x_start=new_x_start, y_start=new_y_start, x_end=new_x_end, y_end=new_y_end, offset=False, lineref=line_ref))
+
             line_mistake_explain.append([name, x_start, y_start, x_end, y_end, new_x_start,
                                          new_y_start, new_x_end, new_y_end, line_start_name, line_end_name, line_ref])
 

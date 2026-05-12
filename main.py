@@ -23,6 +23,7 @@ if __name__ == '__main__':
 
 
 
+
     # pyinstaller --onefile --windowed --add-data "objectdatabase.db;." --hidden-import=ezdxf --hidden-import=sqlalchemy --hidden-import=sqlalchemy.dialects.sqlite --exclude-module PySide6 --exclude-module PyQt6 main.py
 
 
