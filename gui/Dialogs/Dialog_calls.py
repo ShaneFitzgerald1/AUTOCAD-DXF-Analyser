@@ -17,7 +17,7 @@ from backend.output_filepaths import dwg_output
 from gui.Dialogs.edit_tolerance_dialog import edit_tolerences
 from gui.Dialogs.edit_boundary_dialog import edit_boundary
 from gui.UI_backend.ui_helpers import create_buttons, create_vbox
-from gui.UI_backend.ui_updates import _update_status
+from gui.UI_backend.ui_updates import _update_status, update_database_directory_label, update_output_file_type
 
 
 def _open_add_object_dialog(self, names):
@@ -39,8 +39,9 @@ def _open_edit_dialog(self, mode):
 def _open_directory_dialog(self):
     dialog = DatabaseDirectoryDialog(parent=self)
     dialog.exec_()
-    # self.update_status_location()
+    update_database_directory_label(self)
     _update_status(self, 'File Loaded ✅' if self.original_filepath else 'No File Loaded', False)
+
 
 
 def _open_output_type_dialog(self):
@@ -48,7 +49,9 @@ def _open_output_type_dialog(self):
     dialog = SetOutputFileType(current_type=self.output_file_type, parent=self)
     if dialog.exec_() == SetOutputFileType.Accepted:
         self.output_file_type = dialog.collectResult()
-        self._update_status()
+        update_output_file_type(self)
+        # _update_status()
+
         if self.original_filepath is None: 
             return
         if self.original_filepath is not None: 

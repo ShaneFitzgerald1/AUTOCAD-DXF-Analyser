@@ -4,9 +4,11 @@ from gui.runinterface import MyWindow
 from database.db_models import get_configured_db_path
 from database.database_directory import DatabaseDirectoryDialog
 from PyQt5.QtCore import QTimer
+from qt_material import apply_stylesheet
 
 if __name__ == '__main__':
-    app = QApplication(sys.argv)
+    app = QApplication(sys.argv) 
+    apply_stylesheet(app, theme='light_dark.xml')
     win = MyWindow()
     win.show()
 

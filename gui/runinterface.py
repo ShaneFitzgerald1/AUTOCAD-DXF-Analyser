@@ -13,7 +13,7 @@ from backend.convertdwg import convertDWG_DXF
 from backend.output_filepaths import dwg_output
 from gui.UI_backend.ui_helpers import create_buttons
 from gui.Dialogs.Dialog_calls import _open_add_object_dialog, _open_edit_dialog, _open_directory_dialog, _open_output_type_dialog, _open_tolerance_dialog, _open_boundary_dialog
-from gui.UI_backend.ui_updates import set_correct_tab_colour, _update_status, populate_results_table
+from gui.UI_backend.ui_updates import set_correct_tab_colour, _update_status, populate_results_table, update_file_loaded_label
 
 
 class MyWindow(QMainWindow):
@@ -47,7 +47,7 @@ class MyWindow(QMainWindow):
         #Instruction label 
         Instruction = QLabel(f'Import a DXF/DWG File to Begin Analysis')
         Instruction.setAlignment(Qt.AlignCenter)
-        Instruction.setFont(QFont('Inter', 15, QFont.Bold))
+        Instruction.setFont(QFont('Roboto', 15, QFont.Bold))
         self.tab1_grid.addWidget(Instruction, 0, 0, 1, 3)
 
         # Status label — row 0, col 2
@@ -56,7 +56,7 @@ class MyWindow(QMainWindow):
         self.appstatus_vbox.setAlignment(Qt.AlignTop | Qt.AlignRight)
         self.status_label = QLabel(f'Current File: None\nApp State: No File Loaded\nDatabase: {self.db_path}\n File Output Type: {self.output_file_type}')
         self.status_label.setAlignment(Qt.AlignRight | Qt.AlignTop)
-        self.status_label.setFont(QFont('Inter', 14))
+        self.status_label.setFont(QFont('Roboto', 14))
         self.appstatus_vbox.addWidget(self.status_label)
         self.tab1_grid.addLayout(self.appstatus_vbox, 0, 2, 1, 1)
 
@@ -80,14 +80,14 @@ class MyWindow(QMainWindow):
         vbox_t = QVBoxLayout()
         hbox1 = QHBoxLayout()
         hbox1.addStretch()
-        self.Button1 = create_buttons('Import DXF File', self.import_dxf_file, hbox1, "QPushButton {background-color: #0000FF; color: white;} QPushButton:hover{background-color: #00008B;}")
+        self.Button1 = create_buttons('Import DXF File', self.import_dxf_file, hbox1, "QPushButton {background-color: #0000DC; color: white;} QPushButton:hover{background-color: #00008B;}")
         hbox1.addSpacing(100)
-        self.Button2 = create_buttons('View Issues', self.fix_errors, hbox1, "QPushButton {background-color: #0000FF; color: white;} QPushButton:hover{background-color: #00008B;}")
+        self.Button2 = create_buttons('View Issues', self.fix_errors, hbox1, "QPushButton {background-color: #0000DC; color: white;} QPushButton:hover{background-color: #00008B;}")
         hbox1.addStretch()
         vbox_t.addLayout(hbox1)
 
         hbox2 = QHBoxLayout()
-        self.Button3 = create_buttons('Reset App', self.reset_app, hbox2, "QPushButton {background-color: #0000FF; color: white;} QPushButton:hover{background-color: #00008B;}")
+        self.Button3 = create_buttons('Reset App', self.reset_app, hbox2, "QPushButton {background-color: #0000DC; color: white;} QPushButton:hover{background-color: #00008B;}")
         vbox_t.addLayout(hbox2)
         # vbox_t.setContentsMargins(0, 0, 310, 0)
 
@@ -122,9 +122,6 @@ class MyWindow(QMainWindow):
         self.tab1.setLayout(self.tab1_grid)
         self.tabs.addTab(self.tab1, "Import")
 
-        self.tab1.setLayout(self.tab1_grid)
-        self.tabs.addTab(self.tab1, "Import")
-
         set_correct_tab_colour(self, self.tab1)
 
 
@@ -136,11 +133,12 @@ class MyWindow(QMainWindow):
             QMenuBar {background-color: black;
                 color: white;}QMenuBar::item:selected {
                 background-color: #333333;}""")
-        
-        self.tabs.setStyleSheet("""QTabBar {background-color: black;}
-                                QTabBar::tab {background-color: #cccccc;color: black;padding: 4px 10px;}
-        QTabBar::tab:selected { background-color: white;color: black;}
-        QTabWidget::pane {background-color: white;}""")
+
+
+        # self.tabs.setStyleSheet("""QTabBar {background-color: black;}
+        #                         QTabBar::tab {background-color: #cccccc;color: black;padding: 4px 10px;}
+        # QTabBar::tab:selected { background-color: white;color: black;}
+        # QTabWidget::pane {background-color: white;}""")
 
         output_action = QAction('Set Output File Type', self)
         output_action.triggered.connect(lambda: _open_output_type_dialog(self))
@@ -153,6 +151,32 @@ class MyWindow(QMainWindow):
         set_boundary_action = QAction('Set Boundary', self)
         set_boundary_action.triggered.connect(lambda: _open_boundary_dialog(self))
         menubar.addAction(set_boundary_action)
+
+        status_widget = QWidget()
+        status_layout = QHBoxLayout(status_widget)
+        status_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.status_file_label = QLabel("File: None")
+        self.status_file_label.setFont(QFont('Roboto', 9))
+        self.status_file_label.setAlignment(Qt.AlignCenter)
+        self.status_file_label.setStyleSheet("color: white;")
+
+        self.status_db_label = QLabel(f"Database: {self.db_path}")
+        self.status_db_label.setFont(QFont('Roboto', 9))
+        self.status_db_label.setAlignment(Qt.AlignCenter)
+        self.status_db_label.setStyleSheet("color: white;")
+
+        self.status_output_label = QLabel(f"Output: {self.output_file_type}")
+        self.status_output_label.setFont(QFont('Roboto', 9))
+        self.status_output_label.setAlignment(Qt.AlignCenter)
+        self.status_output_label.setStyleSheet("color: white;")
+
+        status_layout.addWidget(self.status_file_label, 1)
+        status_layout.addWidget(self.status_db_label, 1)
+        status_layout.addWidget(self.status_output_label, 1)
+
+        self.statusBar().addPermanentWidget(status_widget, 1)
+        self.statusBar().setStyleSheet("QStatusBar { background-color: #000000; padding: 4px; }")
 
         
     def create_results_tab(self): 
@@ -565,34 +589,10 @@ class MyWindow(QMainWindow):
             unique_names = [n for n in combined if not (n in seen or seen.add(n))]
             _open_add_object_dialog(self, unique_names)
    
-    def _update_status(self, app_state=None, reset=False):
-        """Function that resets teh status label based on weather there is a file imported"""
-        if app_state is not None:
-            self.app_state = app_state
-
-        display_path = getattr(self, 'display_filepath', self.original_filepath)
-        current_file = os.path.basename(display_path) if display_path else 'None'
-        name = os.path.splitext(current_file)[0]
-        db_path = get_configured_db_path() or get_db_path()
-
-        if reset:
-            self.app_state = 'No File Loaded'
-            self.status_label.setText(
-                f'Current File: None\n'
-                f'App State: No File Loaded\n'
-                f'Database: {db_path}\n'
-                f'File Output Type: {self.output_file_type}'
-            )
-        else:
-            self.status_label.setText(
-                f'Current File: {name}\n'
-                f'App State: {self.app_state}\n'
-                f'Database: {db_path}\n'
-                f'File Output Type: {self.output_file_type}'
-            )
 
     def import_dxf_file(self):
         _update_status(self, 'No File Loaded', False)
+        update_file_loaded_label(self, True)
         self.summary_container.setVisible(False)
         self.delete_temp_folder()
 
@@ -642,12 +642,12 @@ class MyWindow(QMainWindow):
 
 
     def _run_analysis(self, filepath, dwgcheck):
-        db_path = get_configured_db_path() or get_db_path()
         while self.tabs.count() > 1:
             self.tabs.removeTab(1)
         self.summary_container.setVisible(False)
 
-        result = autocad_points(filepath)
+        # result = autocad_points(filepath)
+        result = dealing_with_everything(filepath)
 
         if result is None:
             QMessageBox.warning(None, "Invalid File", "The selected file is missing lines, blocks, or a channel outline. Please check the file and try again.")
@@ -655,6 +655,7 @@ class MyWindow(QMainWindow):
             return
 
         _update_status(self, 'File Loaded ✅', False)
+        update_file_loaded_label(self, False)
 
         self.on_line_points        = result.on_line_points
         self.all_lines_table       = result.all_lines_table
@@ -738,8 +739,8 @@ class MyWindow(QMainWindow):
         while self.tabs.count() > 1:
             self.tabs.removeTab(1)
 
-        import os
         _update_status(self, 'No File Loaded', True)
+        update_file_loaded_label(self, True)
 
         self.summary_container.setVisible(False)
 

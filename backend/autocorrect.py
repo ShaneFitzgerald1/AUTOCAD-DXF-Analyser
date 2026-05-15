@@ -7,7 +7,6 @@ from backend.line_connections import line_connections
 from backend.autocad_file_presentation import file_presentation
 from database.db_objects import object_db_results, validate_categories, dxf_mistake_block_explained, dxf_mistake_line_explained
 from database.tolerance_config import extract_values_from_tolerance_sets, extract_boundary_values
-
 from backend.dataclasses.block_ref_data import BlockRef
 from backend.dataclasses.line_data import Lines
 from backend.dataclasses.autocadres import AnalysisResult
@@ -18,35 +17,34 @@ filter = datafiltration()
 l_conn = line_connections()
 file_pres = file_presentation() 
 
+
 def autocad_points(filepath): 
     """This function extracts all necessasry data for analysis from the autocad file. 
        Inputs are filepath (the autocad file itself)
-       output_file: Boolean variable to be set 
-       Outputs are: Block references points, DiagonalBrace_Points (start and end position of all lines), All Walls (Wall points, points on the channel outline)"""
+       """
 
     doc = ezdxf.readfile(filepath)
     msp = doc.modelspace()
     
-    block_length = []
+    blocks = []
     Blockref_Points = []
     all_lines = []
     all_walls = []  
-    insert_refs = []
-    block_names = []
-    new_names = []
-    layers = []
-    offsets = []
     wall_point_refs = [] 
 
+    #Serach the blocks initially to find out how many there are and to set the boundarys 
     for insert in msp.query('INSERT'): 
         blockName = insert.dxf.name
         x = round(insert.dxf.insert.x, 2)
         y = round(insert.dxf.insert.y, 2)
-        block_length.append([blockName, x, y]) 
+        angle = round(insert.dxf.rotation, 2)
+        blocks.append([blockName, x, y]) 
 
     x_min, x_max, y_min, y_max = extract_boundary_values()
-    blocks_fil = maths.blockcheck(block_length, x_min, x_max, y_min, y_max)
+    blocks_fil = maths.blockcheck(blocks, x_min, x_max, y_min, y_max)
+    bedit_check = len(blocks_fil)
 
+    #Search all blocks again 
     for insert in msp.query('INSERT'): 
         blockName = insert.dxf.name
         x = round(insert.dxf.insert.x, 2)
@@ -54,33 +52,18 @@ def autocad_points(filepath):
         angle = round(insert.dxf.rotation, 2)
 
         if blockName.startswith('*U'): #Dynamic block
-            block = doc.blocks.get(blockName)
-            blockRecord = block.block_record
-            try:
-                if xdata := blockRecord.get_xdata("AcDbBlockRepBTag"):
-                    for tag in xdata:
-                        if tag.code == 1005: #xdata tag to store reference handle
-                            ogHandle = tag.value
-                            for b in doc.blocks: #Look through all blocks to find original reference block (handle match)
-                                if b.dxf.handle == ogHandle:
-                                    name = b.dxf.name #Use the name of the original block
-                                    block_def = b  # *** NEW: Store block definition for offset calculation ***
-            except const.DXFValueError: #Doesn't have indirect dynamic block tag or xdata not available
-                print("Not a dynamic block")
-                name = blockName
-                block_def = block  # *** NEW: Use current block if not dynamic ***
+            name, block_def = resolve_block_name(doc, blockName, False)
 
         else: #Non-dynamic standard block
             name = blockName
-            block_names.append([blockName, x, y])
             block_def = doc.blocks.get(blockName)  # *** NEW: Get block definition for standard blocks ***
 
         offset_found = False 
         name_error = None 
 
-        bedit_check = len(blocks_fil)
-
-        if bedit_check == 1: 
+        #blocks and lines arn't sitting in the model space they are in the block definition
+        # These all have to be looked for again here 
+        if bedit_check == 1: #If there is only one block within the sketch (bedit error)
             if blockName != blocks_fil[0][0]:
                 continue
 
@@ -89,32 +72,17 @@ def autocad_points(filepath):
                     x_offset = entity.dxf.insert.x
                     y_offset = entity.dxf.insert.y
                     new_name = entity.dxf.name
-                    offsets.append([new_name, x_offset, y_offset, name])
 
                     if new_name.startswith('*U'):
-                        nested_block = doc.blocks.get(new_name)
-                        nested_record = nested_block.block_record
-                        try:
-                            if xdata := nested_record.get_xdata("AcDbBlockRepBTag"):
-                                for tag in xdata:
-                                    if tag.code == 1005:
-                                        ogHandle = tag.value
-                                        for b in doc.blocks:
-                                            if b.dxf.handle == ogHandle:
-                                                new_name = b.dxf.name
-                        except const.DXFValueError:
-                            pass  
+                        new_name = resolve_block_name(doc, new_name, True)
 
-                    new_names.append([new_name])
                     x_final = round(x + x_offset, 2)
                     y_final = round(y + y_offset, 2)
                     if new_name != name:
                         name_error = True
                     if new_name == name:
-                        name_error = None
-                    insert_refs.append(entity)  
+                        name_error = None 
                     Blockref_Points.append(BlockRef(name=new_name, x=x_final, y=y_final, angle=angle, name_error=name, blockref=entity))
-
 
                 elif entity.dxftype() == 'LINE':
                     layer = entity.dxf.layer
@@ -122,7 +90,6 @@ def autocad_points(filepath):
                     start_y = round(y + entity.dxf.start.y, 2)
                     end_x = round(x + entity.dxf.end.x, 2)
                     end_y = round(y + entity.dxf.end.y, 2)
-                    layers.append([layer])
                     all_lines.append(Lines(name=layer, x_start=start_x, y_start=start_y, x_end=end_x, y_end=end_y, offset=True, lineref=entity))
 
                 elif entity.dxftype() == 'LWPOLYLINE':
@@ -132,19 +99,16 @@ def autocad_points(filepath):
                         offset_points = [
                             [round(x + p[0], 1), round(y + p[1], 1)]
                             for p in raw_points
-                            if 10 <= x + p[0] <= 300000 and 10 <= y + p[1] <= 300000
                         ]
                         if offset_points:   # only append if not empty
                             all_walls.append(offset_points)
 
         else: 
-            insert_refs.append(insert)
             for entity in block_def: #Searching for blocks inside the BEDIT
                 if entity.dxftype() == 'INSERT':
                     x_offset = entity.dxf.insert.x   #find offset inside block 
                     y_offset = entity.dxf.insert.y
                     new_name = entity.dxf.name        #find 
-                    new_names.append([new_name])
                     if x_offset > 0.01 and y_offset > 0.01:
                         x_final = x + x_offset 
                         y_final = y + y_offset 
@@ -153,26 +117,19 @@ def autocad_points(filepath):
                         name_error = True 
                     if new_name == name: 
                         name_error = None 
-         
-            attrib_data = {}  #reset each iteration
-            if insert.has_attrib:
-                for attrib in insert.attribs:
-                    attrib_data[attrib.dxf.tag] = attrib.dxf.text 
                 
-            if offset_found: 
+            if offset_found: #if a singular block is inside a bedit
                 Blockref_Points.append(BlockRef(name=new_name, x=x_final, y=y_final, angle=angle, name_error=name, blockref=insert))
-            else:     
+            else: #normal block 
                 Blockref_Points.append(BlockRef(name=name, x=x, y=y, angle=angle, name_error=name_error, blockref=insert))
         
-    if bedit_check != 1: 
+    if bedit_check != 1: #normal file situation 
         for line in msp.query('LINE'):
             layer = line.dxf.layer
-            name = blockName 
             start_x = round(line.dxf.start.x, 2)
             start_y = round(line.dxf.start.y, 2)
             end_x = round(line.dxf.end.x, 2)
             end_y = round(line.dxf.end.y, 2)
-            layers.append([layer])
             all_lines.append(Lines(name=layer, x_start=start_x, y_start=start_y, x_end=end_x, y_end=end_y, offset=False, lineref=line))   
 
         # Extract POLYLINE data 
@@ -180,6 +137,44 @@ def autocad_points(filepath):
             points = extract_polyline_points(polyline)
             wall_point_refs.append(polyline)
             all_walls.append(points)     
+
+    return Blockref_Points, all_lines, all_walls, wall_point_refs, doc, blocks_fil, bedit_check        
+    
+def extract_polyline_points(polyline): #Convert wall points into x and y points 
+    if polyline.dxftype() == 'LWPOLYLINE':
+        wall_points = []
+        for point in polyline.get_points():
+            x = float(round(point[0], 1))  
+            y = float(round(point[1], 1))  
+            wall_points.append([x, y])
+        return wall_points
+    
+
+def resolve_block_name(doc, blockName, bedit):
+    block = doc.blocks.get(blockName)
+    blockRecord = block.block_record
+    try:
+        if xdata := blockRecord.get_xdata("AcDbBlockRepBTag"):
+            for tag in xdata:
+                if tag.code == 1005: #xdata tag to store reference handle
+                    ogHandle = tag.value
+                    for b in doc.blocks: #Look through all blocks to find original reference block (handle match)
+                        if b.dxf.handle == ogHandle:
+                            name = b.dxf.name #Use the name of the original block
+                            block_def = b  # *** NEW: Store block definition for offset calculation ***
+        if bedit: 
+            return name  
+        else: 
+            return name, block_def   
+                     
+    except const.DXFValueError: #Doesn't have indirect dynamic block tag or xdata not available
+        pass 
+
+
+        
+def dealing_with_everything(filepath): 
+
+    Blockref_Points, all_lines, all_walls, wall_point_refs, doc, blocks_fil, bedit_check = autocad_points(filepath)
 
     if len(all_lines) < 1 or len(all_walls) < 1 or len(Blockref_Points) < 1: 
         return None 
@@ -235,26 +230,12 @@ def autocad_points(filepath):
             mistake_line_reason=mistake_line_reason, blockname_unmatched=blockname_unmatched, linename_unmatched=linename_unmatched,
         )
 
-    
-def extract_polyline_points(polyline): #Convert wall points into x and y points 
-        if polyline.dxftype() == 'LWPOLYLINE':
-            wall_points = []
-            for point in polyline.get_points():
-                x = float(round(point[0], 1))  
-                y = float(round(point[1], 1))  
-                wall_points.append([x, y])
-            return wall_points
 
 def update_dxf_in_place(filepath, output_filepath):
     """This function updates the dxf file, function updates Block reference and line positions based on corrections
     Red box is drawn around Block reference mistakes and a Red circle is drawn around line mistakes. """
-
-    # (doc, _, _, _, _, _, corrected_blocks, _, bedit_lines,  
-    #     duplicate_lines, _, _, post_rejected_block, 
-    #     post_rejected_line, _, all_fail, blocks_fil, _, _, all_walls, wall_point_refs, _, _,
-    #     mistake_block_reason, mistake_line_reasons, _, _) = autocad_points(filepath)
-    
-    result = autocad_points(filepath)
+   
+    result = dealing_with_everything(filepath)
 
     doc = result.doc 
     corrected_blocks = result.corrected_blocks 

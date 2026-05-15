@@ -7,7 +7,7 @@ class BlockRef:
     x: float
     y: float
     angle: float
-    name_error: Optional[bool]
+    name_error: Optional[Any]
     blockref: Any
     
     def __iter__(self):

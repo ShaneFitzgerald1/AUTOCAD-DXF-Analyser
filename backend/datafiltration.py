@@ -358,27 +358,6 @@ class datafiltration:
 
         return matches, min_dist, temp_slope, temp_intercept, temp_name_conn
 
-
-    # @staticmethod
-    # def sort_matches_errors(matches, skip_line, x, y, slope, intercept, tolerance1, line_name):
-    #     min_dist = float('inf')
-    #     temp_slope = None
-    #     temp_intercept = None
-
-    #     if not matches and not skip_line:
-    #         dist = maths.find_distance_to_line(x, y, slope, intercept)
-    #         if dist <= tolerance1: 
-    #             matches = True
-            
-    #         if dist < min_dist:
-    #             min_dist = dist
-    #             temp_slope = slope
-    #             temp_intercept = intercept
-    #             temp_name_conn = line_name   
-                
-    #     return matches, line_name, min_dist, temp_slope, temp_intercept
-
-
     def skip_line_on_path(x, y, x_start_check, x_end_check, y_start_check, y_end_check, tolerance1):  
         skip_line = False 
 
