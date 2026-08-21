@@ -8,7 +8,8 @@ from database.db_models import get_configured_db_path, reinitialise_db
 from gui.Dialogs.add_object_dialog import database_description
 
 
-SHARED_DB_PATH = r'S:\General\Shane\objectdatabase.db'
+# SHARED_DB_PATH = r'S:\General\Shane\objectdatabase.db'
+SHARED_DB_PATH = r'S:\General\Shane\Shared_Database_DO_NOT_TOUCH\\objectdatabase.db'
 
 
 def get_app_db_path():
@@ -17,16 +18,6 @@ def get_app_db_path():
     if getattr(sys, 'frozen', False):
         return os.path.join(os.path.dirname(sys.executable), '_internal', 'objectdatabase.db') #gives the folder hte exe lives in 
     return os.path.join(os.path.dirname(__file__), '..', 'objectdatabase.db')
-
-
-# def detect_install_location():
-#     """Returns a readable label describing where the app is installed."""
-#     if getattr(sys, 'frozen', False):
-#         exe_dir = os.path.dirname(sys.executable).upper() #the folder the exe is in 
-#         if exe_dir.startswith('S:\\') or exe_dir.startswith('S:/'):
-#             return 'Shared Drive (S:\\)'
-#         return f'Local Drive ({os.path.dirname(sys.executable)})'
-#     return 'Development (VS Code)'
 
 
 class DatabaseDirectoryDialog(BaseDialog):

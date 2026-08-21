@@ -170,7 +170,7 @@ def resolve_block_name(doc, blockName, bedit):
     except const.DXFValueError: #Doesn't have indirect dynamic block tag or xdata not available
         pass 
 
-
+    
         
 def dealing_with_everything(filepath): 
 

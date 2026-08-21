@@ -343,9 +343,12 @@ class tolerence_settings(BaseDialog):
         )
         self.setFixedSize(650, 450)
 
+    def collectResult(self):
+        return None
+
     def buildContent(self, layout: QVBoxLayout)-> None:
         tabs = QTabWidget()
-        # ── Tab 1: Description ────────────────────────────────────────── 
+        # ── Tab 1: Description ──────────────────────────────────────────
 
         desc_widget = QWidget()
         desc_layout = QVBoxLayout(desc_widget)

@@ -1,7 +1,7 @@
 import tempfile, shutil, os 
-from PyQt5.QtGui import QFont, QPixmap, QIcon
+from PyQt5.QtGui import QFont, QPixmap, QIcon, QColor
 from PyQt5.QtCore import Qt 
-from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QGridLayout, QLabel, QMessageBox, QFileDialog, QPushButton, QHBoxLayout, QTabWidget, QAction
+from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QGridLayout, QLabel, QMessageBox, QFileDialog, QPushButton, QHBoxLayout, QTabWidget, QAction, QListWidget, QListWidgetItem
 from backend.autocorrect import *
 from gui.UI_backend.base_table import BaseTable
 from utils import resource_path
@@ -13,7 +13,7 @@ from backend.convertdwg import convertDWG_DXF
 from backend.output_filepaths import dwg_output
 from gui.UI_backend.ui_helpers import create_buttons
 from gui.Dialogs.Dialog_calls import _open_add_object_dialog, _open_edit_dialog, _open_directory_dialog, _open_output_type_dialog, _open_tolerance_dialog, _open_boundary_dialog
-from gui.UI_backend.ui_updates import set_correct_tab_colour, _update_status, populate_results_table, update_file_loaded_label
+from gui.UI_backend.ui_updates import set_correct_tab_colour, populate_results_table, update_file_loaded_label
 
 
 class MyWindow(QMainWindow):
@@ -25,6 +25,7 @@ class MyWindow(QMainWindow):
         self.original_filepath = None
         self.output_file_type = 'DWG'
         self.app_state = 'No File Loaded'
+        self.recent_files = []
         self.extract_oda_directory()
         self.initUI()
 
@@ -50,15 +51,17 @@ class MyWindow(QMainWindow):
         Instruction.setFont(QFont('Roboto', 15, QFont.Bold))
         self.tab1_grid.addWidget(Instruction, 0, 0, 1, 3)
 
-        # Status label — row 0, col 2
         self.db_path = get_configured_db_path() or get_db_path()
-        self.appstatus_vbox = QVBoxLayout()
-        self.appstatus_vbox.setAlignment(Qt.AlignTop | Qt.AlignRight)
-        self.status_label = QLabel(f'Current File: None\nApp State: No File Loaded\nDatabase: {self.db_path}\n File Output Type: {self.output_file_type}')
-        self.status_label.setAlignment(Qt.AlignRight | Qt.AlignTop)
-        self.status_label.setFont(QFont('Roboto', 14))
-        self.appstatus_vbox.addWidget(self.status_label)
-        self.tab1_grid.addLayout(self.appstatus_vbox, 0, 2, 1, 1)
+
+        # Status label — row 0, col 2
+        # self.db_path = get_configured_db_path() or get_db_path()
+        # self.appstatus_vbox = QVBoxLayout()
+        # self.appstatus_vbox.setAlignment(Qt.AlignTop | Qt.AlignRight)
+        # self.status_label = QLabel(f'Current File: None\nApp State: No File Loaded\nDatabase: {self.db_path}\n File Output Type: {self.output_file_type}')
+        # self.status_label.setAlignment(Qt.AlignRight | Qt.AlignTop)
+        # self.status_label.setFont(QFont('Roboto', 14))
+        # self.appstatus_vbox.addWidget(self.status_label)
+        # self.tab1_grid.addLayout(self.appstatus_vbox, 0, 2, 1, 1)
 
         # Edit buttons — row 1, col 2, fixed position independent of status label
         purple_style = "QPushButton {background-color: #6A006A; color: white;} QPushButton:hover{background-color: #3B0060;}"
@@ -80,7 +83,7 @@ class MyWindow(QMainWindow):
         vbox_t = QVBoxLayout()
         hbox1 = QHBoxLayout()
         hbox1.addStretch()
-        self.Button1 = create_buttons('Import DXF File', self.import_dxf_file, hbox1, "QPushButton {background-color: #0000DC; color: white;} QPushButton:hover{background-color: #00008B;}")
+        self.Button1 = create_buttons('Import AutoCAD File', self.import_dxf_file, hbox1, "QPushButton {background-color: #0000DC; color: white;} QPushButton:hover{background-color: #00008B;}")
         hbox1.addSpacing(100)
         self.Button2 = create_buttons('View Issues', self.fix_errors, hbox1, "QPushButton {background-color: #0000DC; color: white;} QPushButton:hover{background-color: #00008B;}")
         hbox1.addStretch()
@@ -117,6 +120,27 @@ class MyWindow(QMainWindow):
         self.tab1_grid.setColumnStretch(0, 1)
         self.tab1_grid.setColumnStretch(1, 1)
         self.tab1_grid.setColumnStretch(2, 0)
+
+        self.tab1_grid.setColumnMinimumWidth(2, 220)
+
+        recent_label = QLabel("Recently Accessed Files")
+        recent_label.setFont(QFont('Roboto', 10, QFont.Bold))
+        recent_label.setAlignment(Qt.AlignCenter)
+        recent_label.setStyleSheet("color: black;")
+        self.recent_list = QListWidget()
+        self.recent_list.setFont(QFont('Roboto', 9))
+        self.recent_list.setFixedWidth(210)
+        # self.recent_list.itemDoubleClicked.connect(self._load_recent_file)
+        recent_vbox = QVBoxLayout()
+        self.recent_list.setMaximumHeight(150)
+        self.recent_list.setMaximumWidth(150)
+        recent_vbox.setAlignment(Qt.AlignTop)
+        recent_vbox.setContentsMargins(0, 8, 8, 0)
+        recent_vbox.addWidget(recent_label)
+        recent_vbox.addWidget(self.recent_list)
+        recent_vbox.setContentsMargins(0, 0, 25, 60)
+        self.tab1_grid.addLayout(recent_vbox, 0, 2, 1, 1)
+
 
         #Setting the tab itself
         self.tab1.setLayout(self.tab1_grid)
@@ -156,7 +180,8 @@ class MyWindow(QMainWindow):
         status_layout = QHBoxLayout(status_widget)
         status_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.status_file_label = QLabel("File: None")
+        self.status_file_label = QLabel('File: <span style="color: red;">None</span>')
+        self.status_file_label.setTextFormat(Qt.RichText)
         self.status_file_label.setFont(QFont('Roboto', 9))
         self.status_file_label.setAlignment(Qt.AlignCenter)
         self.status_file_label.setStyleSheet("color: white;")
@@ -591,7 +616,6 @@ class MyWindow(QMainWindow):
    
 
     def import_dxf_file(self):
-        _update_status(self, 'No File Loaded', False)
         update_file_loaded_label(self, True)
         self.summary_container.setVisible(False)
         self.delete_temp_folder()
@@ -623,9 +647,32 @@ class MyWindow(QMainWindow):
             self.imported_dwg = True 
 
         return filepath    
+    
+    
 
-    def update_status_location(self):
-        _update_status(self, 'File Loaded ✅' if self.original_filepath else 'No File Loaded', False)
+    def _add_recent_file(self, filepath):
+        if filepath in self.recent_files:
+            self.recent_files.remove(filepath)
+        self.recent_files.insert(0, filepath)
+        self._refresh_recent_list()
+
+    def _refresh_recent_list(self):
+        self.recent_list.clear()
+        for i, path in enumerate(self.recent_files):
+            list_item = QListWidgetItem(os.path.basename(path))
+            list_item.setData(Qt.UserRole, path)
+            if i == 0:
+                list_item.setFont(QFont('Roboto', 10, QFont.Bold))
+                list_item.setForeground(QColor('#2E8B57'))
+            else:
+                list_item.setFont(QFont('Roboto', 9))
+                list_item.setForeground(QColor('#000000'))
+            self.recent_list.addItem(list_item)
+
+    def _load_recent_file(self, item):
+        self.import_dxf_file(filepath=item.data(Qt.UserRole))
+
+
 
     def reload_file(self):
         if getattr(self, 'imported_dwg', False):
@@ -653,8 +700,7 @@ class MyWindow(QMainWindow):
             QMessageBox.warning(None, "Invalid File", "The selected file is missing lines, blocks, or a channel outline. Please check the file and try again.")
             self.original_filepath = None
             return
-
-        _update_status(self, 'File Loaded ✅', False)
+        
         update_file_loaded_label(self, False)
 
         self.on_line_points        = result.on_line_points
@@ -687,6 +733,9 @@ class MyWindow(QMainWindow):
         if len(self.post_rejected_blocks) > 0 or len(self.post_rejected_lines) or len(self.all_fail) > 0:
             self.database_results()
         self.results_summary()
+
+        file_name = os.path.splitext(filepath)[0]
+        self._add_recent_file(file_name)
 
     
 
@@ -739,7 +788,6 @@ class MyWindow(QMainWindow):
         while self.tabs.count() > 1:
             self.tabs.removeTab(1)
 
-        _update_status(self, 'No File Loaded', True)
         update_file_loaded_label(self, True)
 
         self.summary_container.setVisible(False)
